@@ -22,4 +22,4 @@ clean:
 	rm -f $(PWD_DIR)/*.bbl 
 	rm -f $(PWD_DIR)/*.blg 
 	rm -f $(PWD_DIR)/*.lof
-	rm -f $(PWD_DIR)/*.pdf
+	#rm -f $(PWD_DIR)/*.pdf

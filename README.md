@@ -1,5 +1,20 @@
 # Hausarbeit für IT-Sicherheit - Diffie-Hellman Schlüsselaustausch
 
+## Makefile
+
+Hier liegt eine Makefile rum.
+D.h. die main.tex Datei kann man einfach mit 
+```
+make
+```
+kompilieren. Wenn man den ganzen ramsch loswerden will um
+Ordnung im Ordner zu schaffen, kann man das einfach mit
+```
+make clean
+```
+machen. Aktuell bleibt die pdf.
+
+
 ### Zu machen:
 
 Erklären Sie wie Diffie-Hellman (DH) es zwei Parteien erlaubt
