@@ -1,2 +1,12 @@
 .DS_Store
 
+
+# Latex sachen
+*.aux
+*.log
+*.out
+*.bbl
+*.blg
+*.lof
+*.pdf
+
