@@ -7,6 +7,7 @@
 \usepackage{graphicx}
 \usepackage{textcomp}
 \usepackage{xcolor}
+\usepackage{ngerman}
 \def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
     T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
 \begin{document}
@@ -35,23 +36,12 @@ email address or ORCID}
 City, Country \\
 email address or ORCID}
 \and
-\IEEEauthorblockN{4\textsuperscript{th} Given Name Surname}
-\IEEEauthorblockA{\textit{dept. name of organization (of Aff.)} \\
-\textit{name of organization (of Aff.)}\\
-City, Country \\
-email address or ORCID}
+\IEEEauthorblockN{4\textsuperscript{th} Chingun Ariunbat}
+\IEEEauthorblockA{\textit{Faculty for Comp. Sci. and Bus. Info. Sys.} \\
+\textit{Karlsruhe University of Applied Sciences}\\
+Karlsruhe, Germany\\
+arch1012@h-ka.de}
 \and
-\IEEEauthorblockN{5\textsuperscript{th} Given Name Surname}
-\IEEEauthorblockA{\textit{dept. name of organization (of Aff.)} \\
-\textit{name of organization (of Aff.)}\\
-City, Country \\
-email address or ORCID}
-\and
-\IEEEauthorblockN{6\textsuperscript{th} Given Name Surname}
-\IEEEauthorblockA{\textit{dept. name of organization (of Aff.)} \\
-\textit{name of organization (of Aff.)}\\
-City, Country \\
-email address or ORCID}
 }
 
 \maketitle
@@ -65,6 +55,82 @@ or Math in Paper Title or Abstract.
 \begin{IEEEkeywords}
 component, formatting, style, styling, insert
 \end{IEEEkeywords}
+
+\section{Introduction}
+
+Im digitalen Zeitalter ist die Etabilierung einer sicheren Kommunikation unerlässlich.
+Eine Möglichkeit, dies zu erreichen, besteht in einem 
+von Whitfield Diffie und Martin Hellman vorgeschlagenem Verfahren, 
+das durch die Arbeit von Ralph Merkle inspiriert wurde\cite{dh1976}.
+Dieses wird heute als Diffie-Hellman-Schlüsselaustausch~(DHKE) bezeichnet.
+
+Das Ziel eines DHKE ist es, ein gemeinsames sicheres Geheimnis 
+zwischen mehreren Kommunikationspartnern zu etabilieren, 
+d.h. ein Geheimnis zu erzeugen, dessen Berechnung für Außenstehende
+nicht praktikabel ist.
+
+Auf diesem Geheimnis kann anschließend aufgebaut werden,
+um bspw. als Schlüssel für weitere Verschlüsselungsverfahren zu fungieren.
+Dies wird auch von vielen modernen Kommunikationsstandards auch so genutzt,
+etwa von TLS, OpenVPN, SSH oder IKEv2 {\color{red} QUELLE}.
+
+Ziel dieser Arbeit ist es, verschiedene Implementierungsvarianten
+und Angriffsmöglichkeiten des Verfahrens erneut zu untersuchen {\color{red} konkreter}
+
+\section{Schlüsselaustausch}
+
+\subsection{Notwendigkeit}
+
+
+Betrachten wir das weit verbreitete Beispiel zweier Parteien,
+Alice und Bob, die ausschließlich über einen öffentlichen Kanal
+miteinander kommunizieren können, auf den auch eine dritte Partei, Eve, Zugriff hat.
+Alice und Bob haben nicht die Absicht, Eve Einblick in ihre Kommunikation zu gewähren.
+Dieses Szenario erfordert ein Verfahren, bei dem Eve aus 
+den zwischen Alice und Bob übertragenen Nachrichten 
+keine verwertbare Bedeutung extrahieren kann.
+
+Traditionelle symmetrische Verschlüsselung benötigt ein gemeinsames Geheimnis~$sk$,
+wobei die Funktion~$E$~sowohl zur Ver- als auch zur Entschlüsselung dient.
+Die Verschlüsselung einer Klartextnachricht~$t$~ergibt eine 
+chiffrierte Nachricht~$E(sk,t)=c$,
+während die Entschlüsselung durch~$E(sk,c)=t$~erfolgt.
+
+Dementsprechend erfordert dies, dass sowohl Alice und Bob~$sk$~kennen,
+aber nicht Eve, was mangels privaten Kanals unmöglich ist.
+
+Stattdessen können wir Systeme betrachten,
+die auf assymmetrische Verschlüsselung beruhen, 
+
+
+
+{
+\color{red}
+Wtf ist public key kryptographie überhaupt
+
+wir müssen folgendes erklären:
+\begin{itemize}
+    \item was ist öffentlich, geheim und was ist pk, sk
+\end{itemize}
+
+}
+
+\subsection{Definition}
+Diffie and Hellmans proposed algorithm relies on the asymmetric computational
+effort of exponentiation compared to its inverse operation, logarithms 
+within a finite field
+
+
+
+
+\begin{enumerate}
+    \item[x] einleitung, wo es verwendet wird, tls, openvpn, ssh, IKEv2 und so weiter.
+        wir wollen uns anschauen, wie dh eigentlich genau funktioniert.
+    \item kurz geshcichtlich sagen dass es public key stuff von merkle, diffie und hellman (1976) erfunden wurde.
+    \item definition oder prinzip: finite group logarithm. vielleicht ellipsen? ephemeral und static? 
+    \item implementation in C
+\end{enumerate}
+
 
 \section{Introduction}
 This document is a model and instructions for \LaTeX.
@@ -273,6 +339,7 @@ For papers published in translation journals, please give the English
 citation first, followed by the original foreign-language citation \cite{b6}.
 
 \begin{thebibliography}{00}
+\bibitem{dh1976} W. Diffie and M. E. Hellman, ``New Directions in Cryptography''. IEEE Trans. on Inform. IT-22. 6 (Nov. 1976).644-654.
 \bibitem{b1} G. Eason, B. Noble, and I. N. Sneddon, ``On certain integrals of Lipschitz-Hankel type involving products of Bessel functions,'' Phil. Trans. Roy. Soc. London, vol. A247, pp. 529--551, April 1955.
 \bibitem{b2} J. Clerk Maxwell, A Treatise on Electricity and Magnetism, 3rd ed., vol. 2. Oxford: Clarendon, 1892, pp.68--73.
 \bibitem{b3} I. S. Jacobs and C. P. Bean, ``Fine particles, thin films and exchange anisotropy,'' in Magnetism, vol. III, G. T. Rado and H. Suhl, Eds. New York: Academic, 1963, pp. 271--350.
