@@ -1,5 +1,8 @@
 .DS_Store
 
+# IDE sachen
+**/.idea
+**/node_modules
 
 # Latex sachen
 *.aux

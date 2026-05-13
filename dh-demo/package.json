@@ -1,0 +1,11 @@
+{
+  "name": "dh-demo",
+  "version": "0.0.0",
+  "description": "DH Key Exchange Demo",
+  "main": "index.js",
+  "scripts": {},
+  "devDependencies": {
+    "tsc": "^2.0.4",
+    "typescript": "^6.0.3"
+  }
+}
