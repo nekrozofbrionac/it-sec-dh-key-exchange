@@ -1,335 +1,392 @@
-\documentclass[conference]{IEEEtran}
-\IEEEoverridecommandlockouts
-
-\usepackage[T1]{fontenc}
-\usepackage[utf8]{inputenc}
-\usepackage[ngerman]{babel}
-\usepackage{amsmath,amssymb,amsfonts}
-\usepackage{textcomp}
-\usepackage{xcolor}
-\usepackage{url}
-\usepackage{hyperref}
-
-\begin{document}
-
-\title{Diffie-Hellman Schlüsselaustausch\\
-{\footnotesize Gruppenarbeit IT-Sicherheit}}
-
-\author{\IEEEauthorblockN{}
-\IEEEauthorblockA{\textit{IT-Sicherheit}}
-}
-
-\maketitle
-
-
-
-\section{Einleitung}
-
-Der Diffie-Hellman-Schlüsselaustausch (DH) wurde 1976 von Whitfield
-Diffie und Martin Hellman in ihrem Paper „New directions in
-cryptography``~\cite{dh1976} veröffentlicht. Vor dieser Arbeit war
-es ein offenes Problem, wie zwei Parteien über einen unsicheren Kanal
-einen gemeinsamen Schlüssel aushandeln können, ohne sich vorher
-persönlich getroffen zu haben.
-
-Das Verfahren löst dieses Problem und ist bis heute Bestandteil von
-vielen wichtigen Protokollen, zum Beispiel TLS, SSH oder IPsec. Die
-Grundidee klingt zunächst paradox. Beide Parteien tauschen Werte über
-einen Kanal aus, den ein Angreifer mitlesen kann, und kommen am Ende
-trotzdem zu einem gemeinsamen Geheimnis, das der Angreifer nicht
-kennt. Möglich wird das durch eine mathematische Einwegfunktion, also
-eine Operation, die in eine Richtung einfach, in die andere Richtung
-aber praktisch nicht umkehrbar ist.
-
-In diesem Abschnitt wird zuerst die mathematische Grundlage erklärt,
-danach der Protokollablauf Schritt für Schritt durchgegangen und
-zum Schluss werden die Sicherheitsannahmen besprochen, auf denen DH
-beruht.
-
-\section{Mathematische Grundlagen}
-
-\subsection{Die Gruppe $\mathbb{Z}_p^*$}
-
-DH operiert in einer endlichen, zyklischen Gruppe. Klassischerweise
-ist das die multiplikative Gruppe der ganzen Zahlen modulo einer
-Primzahl~$p$:
-
-\begin{equation}
-    \mathbb{Z}_p^* = \{1, 2, \ldots, p-1\}
-\end{equation}
-
-Diese Gruppe enthält alle Zahlen von 1 bis $p-1$. Die Gruppenoperation
-ist die Multiplikation modulo $p$, das heißt, das Ergebnis jeder
-Multiplikation wird durch $p$ geteilt und nur der Rest behalten.
-Dass $p$ eine Primzahl ist, ist wichtig, weil dadurch jedes Element
-der Gruppe ein multiplikatives Inverses hat. Wäre $p$ keine Primzahl,
-gäbe es Nullteiler und die Struktur würde nicht mehr funktionieren.
-
-\subsection{Generatoren}
-
-Ein \emph{Generator} (oder primitives Element) ist ein Element $g \in
-\mathbb{Z}_p^*$, das durch wiederholtes Potenzieren alle Elemente der
-Gruppe erzeugt:
-
-\begin{equation}
-    \langle g \rangle = \{g^0, g^1, g^2, \ldots, g^{p-2}\} \bmod p
-    = \mathbb{Z}_p^*
-\end{equation}
-
-Das heißt, wenn man $g$ immer wieder mit sich selbst multipliziert
-(und jedes Mal modulo $p$ rechnet), bekommt man irgendwann jede Zahl
-zwischen 1 und $p-1$ als Ergebnis. Nach $p-1$ Schritten landet man
-wieder bei 1, und der Zyklus beginnt von vorne. Die Anzahl der
-Elemente in $\langle g \rangle$ wird als \emph{Ordnung} von~$g$
-bezeichnet.
-
-Nicht jedes Element ist ein Generator. Zur Verdeutlichung ein
-Beispiel in $\mathbb{Z}_7^* = \{1, 2, 3, 4, 5, 6\}$. Für $g = 3$
-ergibt sich:
-\begin{align*}
-3^0 &= 1 \\
-3^1 &= 3 \\
-3^2 &= 9 \equiv 2 \pmod 7 \\
-3^3 &= 27 \equiv 6 \pmod 7 \\
-3^4 &= 81 \equiv 4 \pmod 7 \\
-3^5 &= 243 \equiv 5 \pmod 7 \\
-3^6 &= 729 \equiv 1 \pmod 7
-\end{align*}
-
-Damit erzeugt $g = 3$ alle Elemente von $\mathbb{Z}_7^*$ und ist
-folglich ein Generator. Für $g = 2$ gilt dagegen $2^3 \equiv 1 \pmod
-7$, das heißt, $2$ erzeugt nur die Untergruppe $\{1, 2, 4\}$ und ist
-kein Generator. Welche Elemente Generatoren sind, hängt also von $p$
-ab. In der Praxis wird $g$ zusammen mit $p$ in Standards festgelegt,
-zum Beispiel in den MODP-Gruppen aus RFC~3526~\cite{rfc3526}.
-
-\subsection{Das Diskrete-Logarithmus-Problem}
-
-Die Sicherheit von DH basiert auf folgendem Problem. Gegeben sind
-$g$, $p$ und ein Wert $y = g^x \bmod p$. Gesucht ist der Exponent
-$x$. Dieses Problem nennt man das \emph{Diskrete-Logarithmus-Problem}
-(DLP). Formal sucht man
-
-\begin{equation}
-    x = \log_g y \pmod p.
-\end{equation}
-
-Für kleine $p$ ist das einfach, man probiert einfach alle Werte
-durch. Für große $p$ (in der Praxis mindestens 2048 Bit) gibt es
-aber keinen bekannten klassischen Algorithmus, der das in vernünftiger
-Zeit löst. Das Potenzieren in eine Richtung ($x \to g^x \bmod p$) ist
-also einfach, der Rückweg aber nicht. Genau diese Asymmetrie zwischen
-einfacher und schwerer Richtung ist das, was DH überhaupt erst
-möglich macht~\cite{cfrg-dh}. Alice hat dabei den Wissensvorteil,
-weil sie ihren Exponenten kennt, während ein Angreifer ihn nur aus
-dem öffentlichen Wert zurückrechnen müsste.
-
-\section{Protokollablauf}
-
-Das Protokoll wird hier am Beispiel von zwei Parteien, Alice und Bob,
-beschrieben. Es lässt sich problemlos auf drei oder mehr Parteien
-erweitern, was im Demo-Teil der Arbeit gezeigt wird.
-
-\subsection{Schritt 1: Öffentliche Parameter}
-
-Alice und Bob einigen sich zuerst auf eine große Primzahl~$p$ und
-einen Generator~$g$ mit $1 < g < p$. Diese Werte sind \emph{nicht}
-geheim. Sie können öffentlich bekannt sein und werden in der Praxis
-oft aus Standards übernommen, statt selbst generiert zu werden.
-
-\subsection{Schritt 2: Private Schlüssel}
-
-Alice wählt eine zufällige Zahl
-\begin{equation}
-    a \in \{1, \ldots, p-1\}
-\end{equation}
-und behält diese geheim. Bob macht dasselbe und wählt sich ein
-zufälliges
-\begin{equation}
-    b \in \{1, \ldots, p-1\}.
-\end{equation}
-Die Werte $a$ und $b$ sind die jeweiligen privaten Schlüssel. Sie
-verlassen niemals die Geräte ihrer Besitzer.
-
-\subsection{Schritt 3: Öffentliche Schlüssel}
-
-Alice berechnet ihren öffentlichen Schlüssel
-\begin{equation}
-    A = g^a \bmod p
-\end{equation}
-und schickt diesen an Bob. Bob berechnet entsprechend
-\begin{equation}
-    B = g^b \bmod p
-\end{equation}
-und schickt $B$ an Alice. Auch wenn ein Angreifer $A$ und $B$
-mitliest, kann er daraus wegen des DLP nicht auf $a$ oder $b$
-zurückschließen.
-
-\subsection{Schritt 4: Gemeinsames Geheimnis}
-
-Jetzt kann jede Partei das gemeinsame Geheimnis berechnen. Alice
-rechnet
-\begin{equation}
-    k = B^a \bmod p
-\end{equation}
-und Bob rechnet
-\begin{equation}
-    k' = A^b \bmod p.
-\end{equation}
-
-Dass beide auf denselben Wert kommen, sieht man durch Einsetzen:
-
-\begin{equation}
-    k \equiv (g^b)^a \equiv g^{ab} \equiv (g^a)^b \equiv k' \pmod p
-\end{equation}
-
-Beide Berechnungen liefern $g^{ab} \bmod p$, weil bei der modularen
-Exponentiation $(g^a)^b = (g^b)^a = g^{ab}$ gilt. Das funktioniert,
-weil die Operation kommutativ ist. Der ausgehandelte Wert $k$ wird
-dann üblicherweise durch eine Schlüsselableitungsfunktion (Key
-Derivation Function, KDF) in einen symmetrischen Schlüssel für ein
-Verfahren wie AES überführt.
-
-\section{Sicherheitsannahmen}
-
-Die Sicherheit von DH beruht auf der Annahme, dass bestimmte Probleme
-in $\mathbb{Z}_p^*$ schwer zu lösen sind. Dabei werden zwei eng
-verwandte Probleme unterschieden.
-
-\subsection{Diskretes-Logarithmus-Problem (DLP)}
-
-Wie schon erklärt, lässt sich aus $A = g^a \bmod p$ der Wert $a$
-nicht effizient berechnen, solange $p$ groß genug ist. Würde es einen
-effizienten Algorithmus für das DLP geben, wäre DH komplett gebrochen,
-weil ein Angreifer aus den öffentlichen Schlüsseln direkt die
-privaten Schlüssel rekonstruieren könnte.
-
-\subsection{Computational Diffie-Hellman (CDH)}
-
-Das CDH-Problem ist eine etwas andere Formulierung. Gegeben sind
-$g$, $p$, $A = g^a \bmod p$ und $B = g^b \bmod p$. Gesucht ist
-$g^{ab} \bmod p$, also das gemeinsame Geheimnis. Das CDH-Problem ist
-höchstens so schwer wie das DLP. Wer das DLP lösen kann, kann auch
-CDH lösen. Ob die Umkehrung gilt, ist offen.
-
-Für DH reicht es aus, dass CDH schwer ist. Dass ein Angreifer also
-$A$ und $B$ kennt, hilft ihm nichts, solange er $g^{ab}$ nicht
-ausrechnen kann.
-
-\subsection{Wahl der Parameter}
-
-In der Praxis sind die Parameter entscheidend. Wählt man $p$ oder $g$
-schlecht, kann das Protokoll trotz korrekter Mathematik unsicher sein.
-Übliche Vorgaben~\cite{bsi-tr}:
-
-\begin{itemize}
-    \item $p$ sollte mindestens 2048 Bit groß sein, besser 3072 Bit
-          oder mehr.
-
-    \item $p$ sollte eine \emph{sichere Primzahl} sein, also von der
-          Form $p = 2q + 1$, wobei $q$ ebenfalls prim ist (sogenannte
-          Sophie-Germain-Primzahl). Dadurch hat die relevante
-          Untergruppe Primzahlordnung~$q$, was bestimmte
-          Angriffsklassen wie den Pohlig-Hellman-Algorithmus
-          verhindert.
-
-    \item $g$ sollte ein Generator einer Untergruppe von Primzahlordnung
-          sein.
-
-    \item Die privaten Schlüssel $a$ und $b$ müssen kryptografisch
-          sicher zufällig gewählt werden. Ein vorhersehbarer
-          Zufallsgenerator würde alles aushebeln.
-\end{itemize}
-
-Die in RFC~3526~\cite{rfc3526} definierten MODP-Gruppen werden in der
-Praxis häufig verwendet, weil sie diese Eigenschaften erfüllen und
-ausreichend geprüft sind.
-
-\section{Elliptische-Kurven-Variante (ECDH)}
-
-Eine in der Praxis weit verbreitete Variante ist der Elliptic Curve
-Diffie-Hellman-Austausch (ECDH). Das Prinzip ist dasselbe, nur dass
-nicht in $\mathbb{Z}_p^*$ gerechnet wird, sondern in der Gruppe der
-Punkte einer elliptischen Kurve über einem endlichen Körper.
-
-Der Vorteil ist, dass das diskrete Logarithmusproblem auf elliptischen
-Kurven schwerer ist als in $\mathbb{Z}_p^*$. Dadurch reichen deutlich
-kürzere Schlüssel für ein vergleichbares Sicherheitsniveau. Während
-klassisches DH heute mindestens 2048-Bit-Schlüssel braucht, reichen
-bei ECDH 256 Bit aus~\cite{rfc8446}. Das ist gerade für mobile Geräte
-oder eingebettete Systeme relevant, weil weniger Rechenleistung und
-weniger Bandbreite benötigt werden.
-
-In modernen Protokollen wie TLS 1.3 ist ECDH inzwischen der
-Standardfall. Klassisches DH wird aus Performance- und
-Sicherheitsgründen kaum noch genutzt.
-
-\section{Ausblick: Post-Quanten-Kryptographie}
-
-Sowohl klassisches DH als auch ECDH beruhen auf der Schwierigkeit des
-diskreten Logarithmusproblems. Mit einem ausreichend großen
-Quantencomputer ließe sich dieses Problem allerdings durch den
-Shor-Algorithmus effizient lösen, was DH (und auch RSA) brechen
-würde~\cite{nist-pqc}.
-
-Aus diesem Grund wird aktuell an Post-Quanten-Kryptographie geforscht,
-also an Verfahren, die auch gegen Quantenangriffe sicher sein sollen.
-Dazu gehören unter anderem gitterbasierte Verfahren wie ML-KEM (früher
-Kyber), code-basierte Verfahren wie McEliece und hash-basierte
-Signaturen wie XMSS oder LMS. In der Praxis werden zunehmend
-hybride Verfahren empfohlen, die klassisches DH oder ECDH mit einem
-Post-Quanten-Verfahren kombinieren.
-
-\section{Zusammenfassung}
-
-DH löst das Problem des Schlüsselaustauschs über einen unsicheren
-Kanal. Beide Parteien wählen einen privaten Schlüssel, berechnen
-daraus einen öffentlichen Schlüssel und tauschen diesen aus. Durch
-die Eigenschaft $(g^a)^b = (g^b)^a$ erhalten beide am Ende denselben
-Wert $g^{ab} \bmod p$, ohne dass dieser je übertragen wurde.
-
-Die Sicherheit beruht darauf, dass das DLP und das verwandte
-CDH-Problem für genügend große, sauber gewählte Parameter praktisch
-nicht lösbar sind. In der hier vorgestellten Form schützt das
-Protokoll aber nur gegen passive Angreifer. Ein aktiver Angreifer,
-der sich in die Kommunikation einklinkt, kann DH ohne zusätzliche
-Maßnahmen brechen. Das ist Thema des nächsten Abschnitts (Demo und
-Man-in-the-Middle-Angriff).
-
-\begin{thebibliography}{00}
-
-\bibitem{dh1976}
-W. Diffie und M. Hellman, ``New directions in cryptography,'' 1976.
-[Online]. Verfügbar:
-\url{https://ee.stanford.edu/~hellman/publications/24.pdf}
-
-\bibitem{rfc3526}
-T. Kivinen und M. Kojo, ``More Modular Exponential (MODP)
-Diffie-Hellman groups for Internet Key Exchange (IKE),'' RFC 3526,
-IETF, Mai 2003. [Online]. Verfügbar:
-\url{https://www.rfc-editor.org/rfc/rfc3526}
-
-\bibitem{rfc8446}
-E. Rescorla, ``The Transport Layer Security (TLS) Protocol Version
-1.3,'' RFC 8446, IETF, Aug. 2018. [Online]. Verfügbar:
-\url{https://www.rfc-editor.org/rfc/rfc8446}
-
-\bibitem{cfrg-dh}
-E. Rescorla, ``Diffie-Hellman Key Agreement Method,'' RFC 2631,
-IETF, Juni 1999. [Online]. Verfügbar:
-\url{https://www.rfc-editor.org/rfc/rfc2631}
-
-\bibitem{bsi-tr}
-Bundesamt für Sicherheit in der Informationstechnik, ``Technische
-Richtlinie TR-02102-1: Kryptographische Verfahren, Empfehlungen und
-Schlüssellängen.'' [Online]. Verfügbar:
-\url{https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Publikationen/TechnischeRichtlinien/TR02102/BSI-TR-02102.html}
-
-\bibitem{nist-pqc}
-National Institute of Standards and Technology, ``Post-Quantum
-Cryptography Standardization.'' [Online]. Verfügbar:
-\url{https://csrc.nist.gov/projects/post-quantum-cryptography}
-
-\end{thebibliography}
-
-\end{document}
+    \documentclass[conference]{IEEEtran}
+    \IEEEoverridecommandlockouts
+
+    \usepackage[T1]{fontenc}
+    \usepackage[utf8]{inputenc}
+    \usepackage[ngerman]{babel}
+    \usepackage{amsmath,amssymb,amsfonts}
+    \usepackage{textcomp}
+    \usepackage{xcolor}
+    \usepackage{url}
+    \usepackage{hyperref}
+
+    \begin{document}
+
+    \title{Diffie-Hellman Schlüsselaustausch\\
+    {\footnotesize Gruppenarbeit IT-Sicherheit}}
+
+    \author{\IEEEauthorblockN{}
+    \IEEEauthorblockA{\textit{IT-Sicherheit}}
+    }
+
+    \maketitle
+
+
+
+    \section{Einleitung}
+
+    Der Diffie-Hellman-Schlüsselaustausch (DH) wurde 1976 von Whitfield
+    Diffie und Martin Hellman in ihrem Paper „New directions in
+    cryptography``~\cite{dh1976} veröffentlicht. Vor dieser Arbeit war
+    es ein offenes Problem, wie zwei Parteien über einen unsicheren Kanal
+    einen gemeinsamen Schlüssel aushandeln können, ohne sich vorher
+    persönlich getroffen zu haben.
+
+    Das Verfahren löst dieses Problem und ist bis heute Bestandteil von
+    vielen wichtigen Protokollen, zum Beispiel TLS, SSH oder IPsec. Die
+    Grundidee klingt zunächst paradox. Beide Parteien tauschen Werte über
+    einen Kanal aus, den ein Angreifer mitlesen kann, und kommen am Ende
+    trotzdem zu einem gemeinsamen Geheimnis, das der Angreifer nicht
+    kennt. Möglich wird das durch eine mathematische Einwegfunktion, also
+    eine Operation, die in eine Richtung einfach, in die andere Richtung
+    aber praktisch nicht umkehrbar ist.
+
+    In diesem Abschnitt wird zuerst die mathematische Grundlage erklärt,
+    danach der Protokollablauf Schritt für Schritt durchgegangen und
+    zum Schluss werden die Sicherheitsannahmen besprochen, auf denen DH
+    beruht.
+
+    \section{Mathematische Grundlagen}
+
+    \subsection{Die Gruppe $\mathbb{Z}_p^*$}
+
+    DH operiert in einer endlichen, zyklischen Gruppe. Klassischerweise
+    ist das die multiplikative Gruppe der ganzen Zahlen modulo einer
+    Primzahl~$p$:
+
+    \begin{equation}
+        \mathbb{Z}_p^* = \{1, 2, \ldots, p-1\}
+    \end{equation}
+
+    Diese Gruppe enthält alle Zahlen von 1 bis $p-1$. Die Gruppenoperation
+    ist die Multiplikation modulo $p$, das heißt, das Ergebnis jeder
+    Multiplikation wird durch $p$ geteilt und nur der Rest behalten.
+    Dass $p$ eine Primzahl ist, ist wichtig, weil dadurch jedes Element
+    der Gruppe ein multiplikatives Inverses hat. Wäre $p$ keine Primzahl,
+    gäbe es Nullteiler und die Struktur würde nicht mehr funktionieren.
+
+    \subsection{Generatoren}
+
+    Ein \emph{Generator} (oder primitives Element) ist ein Element $g \in
+    \mathbb{Z}_p^*$, das durch wiederholtes Potenzieren alle Elemente der
+    Gruppe erzeugt:
+
+    \begin{equation}
+        \langle g \rangle = \{g^0, g^1, g^2, \ldots, g^{p-2}\} \bmod p
+        = \mathbb{Z}_p^*
+    \end{equation}
+
+    Das heißt, wenn man $g$ immer wieder mit sich selbst multipliziert
+    (und jedes Mal modulo $p$ rechnet), bekommt man irgendwann jede Zahl
+    zwischen 1 und $p-1$ als Ergebnis. Nach $p-1$ Schritten landet man
+    wieder bei 1, und der Zyklus beginnt von vorne. Die Anzahl der
+    Elemente in $\langle g \rangle$ wird als \emph{Ordnung} von~$g$
+    bezeichnet.
+
+    Nicht jedes Element ist ein Generator. Zur Verdeutlichung ein
+    Beispiel in $\mathbb{Z}_7^* = \{1, 2, 3, 4, 5, 6\}$. Für $g = 3$
+    ergibt sich:
+    \begin{align*}
+    3^0 &= 1 \\
+    3^1 &= 3 \\
+    3^2 &= 9 \equiv 2 \pmod 7 \\
+    3^3 &= 27 \equiv 6 \pmod 7 \\
+    3^4 &= 81 \equiv 4 \pmod 7 \\
+    3^5 &= 243 \equiv 5 \pmod 7 \\
+    3^6 &= 729 \equiv 1 \pmod 7
+    \end{align*}
+
+    Damit erzeugt $g = 3$ alle Elemente von $\mathbb{Z}_7^*$ und ist
+    folglich ein Generator. Für $g = 2$ gilt dagegen $2^3 \equiv 1 \pmod
+    7$, das heißt, $2$ erzeugt nur die Untergruppe $\{1, 2, 4\}$ und ist
+    kein Generator. Welche Elemente Generatoren sind, hängt also von $p$
+    ab. In der Praxis wird $g$ zusammen mit $p$ in Standards festgelegt,
+    zum Beispiel in den MODP-Gruppen aus RFC~3526~\cite{rfc3526}.
+
+    \subsection{Das Diskrete-Logarithmus-Problem}
+
+    Die Sicherheit von DH basiert auf folgendem Problem. Gegeben sind
+    $g$, $p$ und ein Wert $y = g^x \bmod p$. Gesucht ist der Exponent
+    $x$. Dieses Problem nennt man das \emph{Diskrete-Logarithmus-Problem}
+    (DLP). Formal sucht man
+
+    \begin{equation}
+        x = \log_g y \pmod p.
+    \end{equation}
+
+    Für kleine $p$ ist das einfach, man probiert einfach alle Werte
+    durch. Für große $p$ (in der Praxis mindestens 2048 Bit) gibt es
+    aber keinen bekannten klassischen Algorithmus, der das in vernünftiger
+    Zeit löst. Das Potenzieren in eine Richtung ($x \to g^x \bmod p$) ist
+    also einfach, der Rückweg aber nicht. Genau diese Asymmetrie zwischen
+    einfacher und schwerer Richtung ist das, was DH überhaupt erst
+    möglich macht~\cite{cfrg-dh}. Alice hat dabei den Wissensvorteil,
+    weil sie ihren Exponenten kennt, während ein Angreifer ihn nur aus
+    dem öffentlichen Wert zurückrechnen müsste.
+
+    \section{Protokollablauf}
+
+    Das Protokoll wird hier am Beispiel von zwei Parteien, Alice und Bob,
+    beschrieben. Es lässt sich problemlos auf drei oder mehr Parteien
+    erweitern, was im Demo-Teil der Arbeit gezeigt wird.
+
+    \subsection{Schritt 1: Öffentliche Parameter}
+
+    Alice und Bob einigen sich zuerst auf eine große Primzahl~$p$ und
+    einen Generator~$g$ mit $1 < g < p$. Diese Werte sind \emph{nicht}
+    geheim. Sie können öffentlich bekannt sein und werden in der Praxis
+    oft aus Standards übernommen, statt selbst generiert zu werden.
+
+    \subsection{Schritt 2: Private Schlüssel}
+
+    Alice wählt eine zufällige Zahl
+    \begin{equation}
+        a \in \{1, \ldots, p-1\}
+    \end{equation}
+    und behält diese geheim. Bob macht dasselbe und wählt sich ein
+    zufälliges
+    \begin{equation}
+        b \in \{1, \ldots, p-1\}.
+    \end{equation}
+    Die Werte $a$ und $b$ sind die jeweiligen privaten Schlüssel. Sie
+    verlassen niemals die Geräte ihrer Besitzer.
+
+    \subsection{Schritt 3: Öffentliche Schlüssel}
+
+    Alice berechnet ihren öffentlichen Schlüssel
+    \begin{equation}
+        A = g^a \bmod p
+    \end{equation}
+    und schickt diesen an Bob. Bob berechnet entsprechend
+    \begin{equation}
+        B = g^b \bmod p
+    \end{equation}
+    und schickt $B$ an Alice. Auch wenn ein Angreifer $A$ und $B$
+    mitliest, kann er daraus wegen des DLP nicht auf $a$ oder $b$
+    zurückschließen.
+
+    \subsection{Schritt 4: Gemeinsames Geheimnis}
+
+    Jetzt kann jede Partei das gemeinsame Geheimnis berechnen. Alice
+    rechnet
+    \begin{equation}
+        k = B^a \bmod p
+    \end{equation}
+    und Bob rechnet
+    \begin{equation}
+        k' = A^b \bmod p.
+    \end{equation}
+
+    Dass beide auf denselben Wert kommen, sieht man durch Einsetzen:
+
+    \begin{equation}
+        k \equiv (g^b)^a \equiv g^{ab} \equiv (g^a)^b \equiv k' \pmod p
+    \end{equation}
+
+    Beide Berechnungen liefern $g^{ab} \bmod p$, weil bei der modularen
+    Exponentiation $(g^a)^b = (g^b)^a = g^{ab}$ gilt. Das funktioniert,
+    weil die Operation kommutativ ist. Der ausgehandelte Wert $k$ wird
+    dann üblicherweise durch eine Schlüsselableitungsfunktion (Key
+    Derivation Function, KDF) in einen symmetrischen Schlüssel für ein
+    Verfahren wie AES überführt.
+
+    \section{Sicherheitsannahmen}
+
+    Die Sicherheit von DH beruht auf der Annahme, dass bestimmte Probleme
+    in $\mathbb{Z}_p^*$ schwer zu lösen sind. Dabei werden zwei eng
+    verwandte Probleme unterschieden.
+
+    \subsection{Diskretes-Logarithmus-Problem (DLP)}
+
+    Wie schon erklärt, lässt sich aus $A = g^a \bmod p$ der Wert $a$
+    nicht effizient berechnen, solange $p$ groß genug ist. Würde es einen
+    effizienten Algorithmus für das DLP geben, wäre DH komplett gebrochen,
+    weil ein Angreifer aus den öffentlichen Schlüsseln direkt die
+    privaten Schlüssel rekonstruieren könnte.
+
+    \subsection{Computational Diffie-Hellman (CDH)}
+
+    Das CDH-Problem ist eine etwas andere Formulierung. Gegeben sind
+    $g$, $p$, $A = g^a \bmod p$ und $B = g^b \bmod p$. Gesucht ist
+    $g^{ab} \bmod p$, also das gemeinsame Geheimnis. Das CDH-Problem ist
+    höchstens so schwer wie das DLP. Wer das DLP lösen kann, kann auch
+    CDH lösen. Ob die Umkehrung gilt, ist offen.
+
+    Für DH reicht es aus, dass CDH schwer ist. Dass ein Angreifer also
+    $A$ und $B$ kennt, hilft ihm nichts, solange er $g^{ab}$ nicht
+    ausrechnen kann.
+
+    \subsection{Wahl der Parameter}
+
+    In der Praxis sind die Parameter entscheidend. Wählt man $p$ oder $g$
+    schlecht, kann das Protokoll trotz korrekter Mathematik unsicher sein.
+    Übliche Vorgaben~\cite{bsi-tr}:
+
+    \begin{itemize}
+        \item $p$ sollte mindestens 2048 Bit groß sein, besser 3072 Bit
+            oder mehr.
+
+        \item $p$ sollte eine \emph{sichere Primzahl} sein, also von der
+            Form $p = 2q + 1$, wobei $q$ ebenfalls prim ist (sogenannte
+            Sophie-Germain-Primzahl). Dadurch hat die relevante
+            Untergruppe Primzahlordnung~$q$, was bestimmte
+            Angriffsklassen wie den Pohlig-Hellman-Algorithmus
+            verhindert.
+
+        \item $g$ sollte ein Generator einer Untergruppe von Primzahlordnung
+            sein.
+
+        \item Die privaten Schlüssel $a$ und $b$ müssen kryptografisch
+            sicher zufällig gewählt werden. Ein vorhersehbarer
+            Zufallsgenerator würde alles aushebeln.
+    \end{itemize}
+
+    Die in RFC~3526~\cite{rfc3526} definierten MODP-Gruppen werden in der
+    Praxis häufig verwendet, weil sie diese Eigenschaften erfüllen und
+    ausreichend geprüft sind.
+
+    \section{Elliptische-Kurven-Variante (ECDH)}
+
+    Eine in der Praxis weit verbreitete Variante ist der Elliptic Curve
+    Diffie-Hellman-Austausch (ECDH). Das Prinzip ist dasselbe, nur dass
+    nicht in $\mathbb{Z}_p^*$ gerechnet wird, sondern in der Gruppe der
+    Punkte einer elliptischen Kurve über einem endlichen Körper.
+
+    Der Vorteil ist, dass das diskrete Logarithmusproblem auf elliptischen
+    Kurven schwerer ist als in $\mathbb{Z}_p^*$. Dadurch reichen deutlich
+    kürzere Schlüssel für ein vergleichbares Sicherheitsniveau. Während
+    klassisches DH heute mindestens 2048-Bit-Schlüssel braucht, reichen
+    bei ECDH 256 Bit aus~\cite{rfc8446}. Das ist gerade für mobile Geräte
+    oder eingebettete Systeme relevant, weil weniger Rechenleistung und
+    weniger Bandbreite benötigt werden.
+
+    In modernen Protokollen wie TLS 1.3 ist ECDH inzwischen der
+    Standardfall. Klassisches DH wird aus Performance- und
+    Sicherheitsgründen kaum noch genutzt.
+
+    \section{Ausblick: Post-Quanten-Kryptographie}
+
+    Sowohl klassisches DH als auch ECDH beruhen auf der Schwierigkeit des
+    diskreten Logarithmusproblems. Mit einem ausreichend großen
+    Quantencomputer ließe sich dieses Problem allerdings durch den
+    Shor-Algorithmus effizient lösen, was DH (und auch RSA) brechen
+    würde~\cite{nist-pqc}.
+
+    Aus diesem Grund wird aktuell an Post-Quanten-Kryptographie geforscht,
+    also an Verfahren, die auch gegen Quantenangriffe sicher sein sollen.
+    Dazu gehören unter anderem gitterbasierte Verfahren wie ML-KEM (früher
+    Kyber), code-basierte Verfahren wie McEliece und hash-basierte
+    Signaturen wie XMSS oder LMS. In der Praxis werden zunehmend
+    hybride Verfahren empfohlen, die klassisches DH oder ECDH mit einem
+    Post-Quanten-Verfahren kombinieren.
+
+    \section{Zusammenfassung}
+
+    DH löst das Problem des Schlüsselaustauschs über einen unsicheren
+    Kanal. Beide Parteien wählen einen privaten Schlüssel, berechnen
+    daraus einen öffentlichen Schlüssel und tauschen diesen aus. Durch
+    die Eigenschaft $(g^a)^b = (g^b)^a$ erhalten beide am Ende denselben
+    Wert $g^{ab} \bmod p$, ohne dass dieser je übertragen wurde.
+
+    Die Sicherheit beruht darauf, dass das DLP und das verwandte
+    CDH-Problem für genügend große, sauber gewählte Parameter praktisch
+    nicht lösbar sind. In der hier vorgestellten Form schützt das
+    Protokoll aber nur gegen passive Angreifer. Ein aktiver Angreifer,
+    der sich in die Kommunikation einklinkt, kann DH ohne zusätzliche
+    Maßnahmen brechen. Das ist Thema des nächsten Abschnitts (Demo und
+    Man-in-the-Middle-Angriff).
+
+    \section{Vermeidung von Angriffen}
+
+    Wie bei allen kryptografischen Protokollen ist es auch bei DH wichtig, die richtigen Parameter zu wählen und zusätzliche Maßnahmen zu ergreifen, um Angriffe zu verhindern. Im Folgenden werden einige bekannte Angriffe und deren Gegenmaßnahmen beschrieben.
+
+    \subsection{Man in the middle}
+    Wie bereits erwähnt, kann ein aktiver Angreifer, der sich in die Kommunikation einklinkt,den DH-Schlüsselaustausch brechen. Um einen klassischen Man-in-the-Middle-Angriff zu verhindern, müssen die Parteien ihre öffentlichen Schlüssel authentifizieren. Ist erstmal sichergestellt, dass zwei Parteien tatsächlich miteinander kommunizieren, ist ein Angriff als Zwischenposten nicht mehr möglich. Das kann zum Beispiel durch digitale Signaturen oder durch die Verwendung von Zertifikaten geschehen. In TLS 1.3 wird dies durch die Verwendung von Zertifikaten und der Signatur der Handshake-Nachrichten erreicht.\cite[§4.4.2, §4.4.3]{rfc8446} Näheres dazu wird in Abschnitt xx erläutert. 
+
+    \subsection{Logjam}
+    Ein weiterer typischer Angriff ist der sogenannte Logjam-Angriff, bei dem ein Angreifer schwache Parameter (z.B. eine zu kleine Primzahl) erzwingt, um das DLP lösbar zu machen. Dabei manipuliert der Angreifer die Handshake-Nachrichten so, dass beide Parteien davon ausgehen, dass das System nur schwache Gruppen unterstützt, und dadurch auf unsichere Parameter zurückfallen. So werden dann zum Beispiel nur 512 Bit große Primzahlen verwendet statt die sichereren 2048 Bit.\cite{logjam} Moderne Protokolle wie TLS 1.3 haben solche schwachen Gruppen explizit ausgeschlossen, um dieses Problem zu vermeiden.\cite[§1.2]{rfc8446} Da aber viele Systeme noch TLS 1.2 und alte DHE\_EXPORT (absichtlich schwache Krypthografie) unterstützen, da diese nie aktiv entfernt wurden, ist es wichtig, auch hier auf die Wahl sicherer Parameter zu achten und schwache Gruppen aktiv zu deaktivieren.\cite{logjam, rfc7919}
+
+    \subsection{Number Field Sieve}
+    Da der DH-Schlüsselaustausch auf der Komplexität des DLP basiert, ist das Problem - und damit die Sicherheit des Systems - leicht lösbar sobald der Angreifer die genutzte Primzahl kennt. Es wurde empirisch gezeigt, dass eine einzige Vorberechnung für eine 1024-Bit-Primzahl ausreicht, um passiv 18\% der populären HTTPS-Sites, 66\% der IPsec-VPNs und 26\% der SSH-Server zu kompromittieren.\cite{logjam} Denn das ist der Punkt an dem der Number Field Sieve Algorithmus anssetzt. Dieser kann in einer sehr aufwändigen Vorberechnungsphase die Primzahl faktorisieren. Dabei sucht er sich viele kleine Primzahlen — die sogenannte Faktorbasis — und berechnet für jede davon den diskreten Logarithmus in der Gruppe modulo p. Dabei entsteht eine Art Nachschlagewerk pro Gruppe. In Phase 2 berechnet der Algorithmus dann konkrete Kombinationen der Faktorbasis um einen konkreten Wert A (bekannter Schlüssel) zu bekommen. Gelingt dies, so ist die zugehörige private Zahl a bekannt und das DLP gelöst.\cite{logjam} So kann im Anschluss jeder Server, der diese Primzahl verwendet, gebrochen werden. Welche Server diese Primzahl nutzt kann durch valide TLS-Handshakes oder durch Tools wie ZMap — ein 2013 entwickelter schneller Netzwerkscanner der das gesamte IPv4-Internet in unter 45 Minuten scannen kann\cite{zmap} - herausgefunden werden.  Daher ist es wichtig, dass Serverbetreiber sicherstellen, dass sie eine einzigartige Parametergruppe verwenden, um die Sicherheit ihrer Server zu gewährleisten.
+
+    \section{Forward Secrecy}
+    Ein wichtiger Aspekt moderner kryptografischer Protokolle ist die sogenannte Forward Secrecy (auch Perfect Forward Secrecy, PFS). Sie stellt sicher, dass selbst wenn ein Angreifer in der Zukunft den privaten Schlüssel eines Servers kompromittiert, vergangene Kommunikationssitzungen nicht entschlüsselt werden können. \cite[§1.2]{rfc8446}\cite{rfc4949} Das bedeutet, dass die Sicherheit der Kommunikation nicht von der langfristigen Sicherheit eines einzelnen Schlüssels abhängt. Ohne Forward Secrecy könnte ein Angreifer, der den privaten Schlüssel eines Servers stiehlt, alle früheren Aufzeichnungen der Kommunikation entschlüsseln, was ein erhebliches Risiko darstellt. 
+    \\
+    
+
+    Beim DH-Schlüsselaustausch kann Forward Secrecy erreicht werden, indem für jede Sitzung ein neues Schlüsselpaar generiert wird. Diese Schlüssel werden auch Ephemeral Schlüssel genannt, weil sie nur für die Dauer einer Sitzung gültig sind. Sobald die Sitzung beendet ist, werden diese Schlüssel verworfen. Das bedeutet, dass selbst wenn der private Schlüssel eines Servers kompromittiert wird, die Schlüssel für vergangene Sitzungen nicht bekannt sind und daher nicht entschlüsselt werden können. In TLS 1.3 ist die Unterstützung von Forward Secrecy verpflichtend, was die Sicherheit der Kommunikation erheblich verbessert.\cite{logjam}\cite[§1.2]{rfc8446}
+    Das selbe Prinzip kann auch bei der zuvor erwähnten Elliptischen-Kurven-Variante (ECDH) angewendet werden, um auch hier Forward Secrecy zu gewährleisten.
+    \\
+    
+    
+    Ein weiterer Punkt bei dem Forward Secrecy wichtig ist, ist die Post-Quanten-Kryptographie. Wie bereits erwähnt, können Quantencomputer bald in der Lage sein, das DLP zu lösen. Es wird von Sicherheitsbehörden wie der NSA und NIST angenommen, dass verschlüsselte Kommunikationen bereits heute aufgezeichnet werden, um sie später zu entschlüsseln.\cite{nist-pqc} Durch die Verwendung von Forward Secrecy wird dieses Risiko reduziert, da die Schlüssel für vergangene Sitzungen nicht mehr verfügbar sind, selbst wenn der langfristige private Schlüssel kompromittiert wird. So müsste ein Angreifer für jede Sitzung ein neues DLP lösen, was den Angriff erheblich erschwert.
+
+
+
+
+
+
+
+
+    \begin{thebibliography}{00}
+
+    \bibitem{dh1976}
+    W. Diffie und M. Hellman, ``New directions in cryptography,'' 1976.
+    [Online]. Verfügbar:
+    \url{https://ee.stanford.edu/~hellman/publications/24.pdf}
+
+    \bibitem{rfc3526}
+    T. Kivinen und M. Kojo, ``More Modular Exponential (MODP)
+    Diffie-Hellman groups for Internet Key Exchange (IKE),'' RFC 3526,
+    IETF, Mai 2003. [Online]. Verfügbar:
+    \url{https://www.rfc-editor.org/rfc/rfc3526}
+
+    \bibitem{rfc8446}
+    E. Rescorla, ``The Transport Layer Security (TLS) Protocol Version
+    1.3,'' RFC 8446, IETF, Aug. 2018. [Online]. Verfügbar:
+    \url{https://www.rfc-editor.org/rfc/rfc8446}
+
+    \bibitem{cfrg-dh}
+    E. Rescorla, ``Diffie-Hellman Key Agreement Method,'' RFC 2631,
+    IETF, Juni 1999. [Online]. Verfügbar:
+    \url{https://www.rfc-editor.org/rfc/rfc2631}
+
+    \bibitem{bsi-tr}
+    Bundesamt für Sicherheit in der Informationstechnik, ``Technische
+    Richtlinie TR-02102-1: Kryptographische Verfahren, Empfehlungen und
+    Schlüssellängen.'' [Online]. Verfügbar:
+    \url{https://www.bsi.bund.de/SharedDocs/Downloads/DE/BSI/Publikationen/TechnischeRichtlinien/TR02102/BSI-TR-02102.html}
+
+    \bibitem{nist-pqc}
+    National Institute of Standards and Technology, ``Post-Quantum
+    Cryptography Standardization.'' [Online]. Verfügbar:
+    \url{https://csrc.nist.gov/projects/post-quantum-cryptography}
+
+    \bibitem{logjam}
+    D. Adrian et al., ``Imperfect Forward Secrecy: How Diffie-Hellman
+    Fails in Practice,'' in \textit{Proc. 22nd ACM Conference on Computer
+    and Communications Security (CCS'15)}, Denver, CO, Okt. 2015.
+    [Online]. Verfügbar: \url{https://weakdh.org/imperfect-forward-secrecy-ccs15.pdf}
+
+    \bibitem{rfc7919}
+    D. Gillmor, ``Negotiated Finite Field Diffie-Hellman Ephemeral
+    Parameters for TLS,'' RFC 7919, IETF, Aug. 2016.
+    [Online]. Verfügbar: \url{https://www.rfc-editor.org/rfc/rfc7919}
+
+    \bibitem{zmap}
+    Z. Durumeric, E. Wustrow und J. A. Halderman, ``ZMap: Fast
+    Internet-wide Scanning and Its Security Applications,'' in
+    \textit{Proc. 22nd USENIX Security Symposium}, Washington, D.C.,
+    Aug. 2013, S. 605--620.
+    [Online]. Verfügbar:
+    \url{https://www.usenix.org/system/files/conference/usenixsecurity13/sec13-paper_durumeric.pdf}
+
+    \bibitem{rfc4949}
+    R. Shirey, ``Internet Security Glossary, Version 2,''
+    RFC 4949, IETF, Aug. 2007.
+    [Online]. Verfügbar:
+    \url{https://www.rfc-editor.org/rfc/rfc4949}
+
+    \end{thebibliography}
+
+    \end{document}
