@@ -23,23 +23,23 @@
         .container {
             display: flex;
             flex-direction: column;
-            margin: 1em;
             gap: 1em;
             align-items: stretch;
         }
 
-        .flex-column-gap {
-            display: flex;
-            flex-direction: column;
-            gap: 1em;
+        .channel-message {
+            width: 100%;
+            border: 1px solid lightgray;
+            border-radius: 5px;
+            padding: 0.5em;
         }
 
-        .input-fields {
-            width: 100%;
-            display: flex;
-            flex-direction: row;
+        .config-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-auto-rows: 3em ;
             gap: 1em;
-            justify-content: flex-start;
+            justify-items: stretch;
         }
 
         .input-field {
@@ -47,59 +47,48 @@
             flex-direction: column;
         }
 
-        #channelMessageContainer > div {
-            width: 100%;
-            border: 1px solid lightgray;
-            border-radius: 5px;
-            padding: 0.5em;
-        }
-
-
     </style>
 </head>
 <body>
 <div class="outer">
     <h1>DH-Demo</h1>
-    <div class="flex-column-gap">
-        <div class="input-fields">
-            <div class="input-field">
-                <label for="createChannelGenerator">Generator</label>
-                <input type="number" id="createChannelGenerator"/>
-            </div>
-            <div class="input-field">
-                <label for="createChannelPrime">Primzahl</label>
-                <input type="number" id="createChannelPrime"/>
-            </div>
-            <button id="createChannel">Channel erstellen</button>
+    <div class="config-grid">
+        <div class="input-field">
+            <label for="createChannelGenerator">Generator</label>
+            <input type="number" id="createChannelGenerator"/>
         </div>
-        <div class="input-fields">
-            <div class="input-field">
-                <label for="createPartnerName">Name</label>
-                <input type="text" id="createPartnerName"/>
-            </div>
-            <div class="input-field">
-                <label for="createPartnerSk">Privater Schlüssel</label>
-                <input type="number" id="createPartnerSk"/>
-            </div>
-            <button id="createPartner">Kommpartner hinzufügen</button>
+        <div class="input-field">
+            <label for="createChannelPrime">Primzahl</label>
+            <input type="number" id="createChannelPrime"/>
         </div>
+        <button id="createChannel">Kanal erstellen</button>
+        <div class="input-field">
+            <label for="createPartnerName">Name</label>
+            <input type="text" id="createPartnerName"/>
+        </div>
+        <div class="input-field">
+            <label for="createPartnerSk">Privater Schlüssel</label>
+            <input type="number" id="createPartnerSk"/>
+        </div>
+        <button id="createPartner">Partner hinzufügen</button>
+        <div>
+            <!--empty for grid lol-->
+        </div>
+        <button id="establishSecret">Geheimnis errechnen</button>
     </div>
-
-    <div class="flex-column-gap">
-        <div class="input-fields">
-            <button id="establishSecret">Geheimnis errechnen</button>
-        </div>
+    <h3>
+        Kommunikationskanal
+    </h3>
+    <div class="container" id="channelContainer">
     </div>
-
     <h3>Partner (und deren Geheimnisse)</h3>
     <div class="container" id="partnerContainer">
-        <div>Noch niemand</div>
     </div>
     <h3>Öffentliche Nachrichten</h3>
-    <div class="container" id="channelMessageContainer">
-        <div>
-            Channel nonexistent or no communication established yet.
-        </div>
+    <div class="container" style="width: 100%" id="channelMessageContainer">
+    </div>
+    <div style="height:5em">
+        <!--empty for spacing-->
     </div>
 </div>
 </body>
