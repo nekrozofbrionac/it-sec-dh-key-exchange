@@ -66,12 +66,15 @@ class MsgChannel implements Recipient {
       if (success) {
         this.recipients.set(id, recipient);
       }
-      this.sendMsg({
+      const messageToSend: Message = {
         from: null,
-        target: id,
+          target: id,
         type: "connectResponse",
-        payload: success ? recipient : null
-      })
+        payload: success ? this: null
+      }
+      this.msgLog.push(messageToSend);
+      this.sendMsg(messageToSend)
+      return;
     }
     if (message.type === "disconnect") {
       this.recipients.delete(message.from);
@@ -81,10 +84,13 @@ class MsgChannel implements Recipient {
   }
 
   private sendMsg(message: Message) {
-    this.msgLog.push(message);
+    // this.msgLog.push(message);
     if (message.target === null) {
       // broadcast
       this.recipients.forEach((recipient) => {
+        if (recipient.id === message.from) {
+          return;
+        }
         recipient.receiveMsg(message)
       });
     } else {
@@ -99,7 +105,7 @@ class Partner implements Recipient {
   public msgLog: Message[] = [];
   public channel: Recipient | null = null;
 
-  private peopleWeKnow: Set<string> = new Set<string>();
+  public peopleWeKnow: Set<string> = new Set<string>();
 
   constructor(
     name: string
@@ -131,7 +137,7 @@ class Partner implements Recipient {
     this.channel = null
   }
 
-  ping(target: string, payload: string = "ping"): void {
+  ping(target: string | null, payload: string = "ping"): void {
     this.sendMsg({
       from: this.id,
       target: target,
@@ -180,130 +186,6 @@ class Partner implements Recipient {
   }
 }
 
-class Channel {
-  public readonly partners: OldPartner[] = [];
-  public prime: number = 23;
-  public generator: number = 5;
-  public secretEstablished: boolean = false;
-  public publishedMessages: string[] = [];
-
-  constructor(
-    generator: number,
-    prime: number,
-  ) {
-    this.generator = generator;
-    this.prime = prime;
-  }
-
-  public addPartner(partner: OldPartner) {
-    if (this.secretEstablished) {
-      throw new Error("Secret already established, cannot add new partner");
-    }
-    this.askToAddPartner(partner)
-  }
-
-  public establishSecret() {
-    if (this.partners.length < 2) {
-      // degenerate case
-      this.onEstablishSecretFinished();
-    }
-
-    const numberOfPartners: number = this.partners.length;
-    // map von runde zu map von partner zu public key
-    // je nach runde besteht der public key also aus den beiträgen aller mitgliedern davor
-    const allPks: Map<number, Map<number, number>> = new Map<number, Map<number, number>>();
-
-    // first round
-    let pksOfFirstRound: Map<number, number> = new Map<number, number>();
-    for (let i = 0; i < numberOfPartners; i++) {
-      const pkResponse: number = this.askToEncode(i, this.generator, this.prime);
-      pksOfFirstRound.set(i, pkResponse);
-    }
-    allPks.set(0, pksOfFirstRound);
-
-    // 1->n-1 rounds
-    for (let round = 1; round < numberOfPartners - 1; round++) {
-      let pkOfRound: Map<number, number> = new Map<number, number>();
-
-      for (let i = 0; i < numberOfPartners; i++) {
-        const indexOfPrevPartnerPrevRound = (i - 1 + numberOfPartners) % numberOfPartners;
-        const pk: number = allPks.get(round - 1)?.get(indexOfPrevPartnerPrevRound)!!; // public key des vorherigen partners aus der vorherigen runde
-
-        const pkResponse: number = this.askToEncode(i, pk, this.prime);
-        pkOfRound.set(i, pkResponse);
-      }
-
-      allPks.set(round, pkOfRound);
-    }
-
-    // last round
-    for (let i = 0; i < numberOfPartners; i++) {
-      const prevIndex = (i - 1 + numberOfPartners) % numberOfPartners;
-      const pk: number = allPks.get(numberOfPartners - 2)?.get(prevIndex) || 1; // public key des vorherigen partners aus der vorherigen runde
-
-      this.askToFinalizeSecret(i, pk, this.prime);
-    }
-
-    this.onEstablishSecretFinished();
-  }
-
-  public onEstablishSecretFinished() {
-    this.secretEstablished = true;
-    return;
-  }
-
-  public askToAddPartner(partner: OldPartner) {
-    // this.publishedMessages.push("Asking to add partner " + partner.name);
-    this.partners.push(partner);
-    this.publishedMessages.push("Partner " + partner.name + "(" + (this.partners.length - 1) + ") zum Kanal hinzugefügt");
-
-  }
-
-  public askToEncode(recipient: number, base: number, prime: number): number {
-    // asking partner i (name) to encode following pk: base, prime
-    this.publishedMessages.push("Asking partner " + this.partners[recipient].name + "(" + recipient + ") to encode following base: " + base + " with mod: " + prime);
-    const response: number = this.partners[recipient].encode(base, prime);
-    this.publishedMessages.push("Partner " + this.partners[recipient].name + "(" + recipient + ") responded with: " + response);
-    return response
-  }
-
-  public askToFinalizeSecret(recipient: number, base: number, prime: number) {
-    this.publishedMessages.push("Asking partner " + this.partners[recipient].name + "(" + recipient + ") to finalize secret with following base: " + base + " with mod: " + prime);
-    this.partners[recipient].finalizeSecret(base, prime);
-    this.publishedMessages.push("Partner " + this.partners[recipient].name + "(" + recipient + ") finalized secret");
-  }
-}
-
-class OldPartner {
-  public readonly name: string;
-  private sk: number;
-  private ss: number | undefined; // shared secret
-
-  constructor(
-    name: string,
-    sk: number
-  ) {
-    this.name = name;
-    this.sk = sk;
-  }
-
-  public encode(base: number, prime: number): number {
-    return modExp(base, this.sk, prime);
-  }
-
-  public finalizeSecret(encodedValue: number, prime: number) {
-    this.ss = modExp(encodedValue, this.sk, prime);
-  }
-
-  public getAllInfos() {
-    return {
-      name: this.name,
-      sk: this.sk,
-      ss: this.ss
-    };
-  }
-}
-
 const names: string[] = [
   "Alice",
   "Bob",
@@ -335,170 +217,162 @@ const names: string[] = [
 ];
 
 type UiContext = {
-  createChannelGeneratorInput: HTMLInputElement
-  createChannelPrimeInput: HTMLInputElement
-  createChannelButton: HTMLButtonElement
   createPartnerNameInput: HTMLInputElement
   createPartnerSkInput: HTMLInputElement
   createPartnerButton: HTMLButtonElement
-  establishSecretButton: HTMLButtonElement
   partnerContainer: HTMLDivElement
-  channelContainer: HTMLDivElement
-  channelMessageContainer: HTMLDivElement
+  currentTabContainer: HTMLDivElement
+  currentTab: string | null
+  messageContainer: HTMLDivElement
 }
 
-const dhdemo: {
-  context: {
-    channel: Channel | null,
-    partners: OldPartner[]
-  },
+interface State {
   ui: UiContext
-} = {
-  context: {
-    channel: null,
-    partners: []
-  },
-  ui: null as unknown as UiContext
+  channel: MsgChannel;
+  partners: Partner[];
 }
 
-function setPartnerDefaults() {
-  const demoPrime = parseInt(dhdemo.ui.createChannelPrimeInput.value);
-
-  dhdemo.ui.createPartnerNameInput.value = names[Math.min(dhdemo.context.partners.length % names.length)];
-  dhdemo.ui.createPartnerSkInput.value = Math.floor(Math.random() * demoPrime).toString();
+function setDefaults(s: State) {
+  s.ui.createPartnerNameInput.value = names[s.partners.length % names.length];
+  s.ui.createPartnerSkInput.value = (Math.floor(Math.random() * 10000) + 1).toString();
 }
 
-function displayChannelInfo() {
-  const channel = dhdemo.context.channel
-  if (!channel) {
-    dhdemo.ui.channelContainer.innerHTML = "Noch kein Kanal erstellt";
-    return;
-  }
-  dhdemo.ui.channelContainer.innerHTML = "Kanal mit generator: " + channel.generator + " und primzahl: " + channel.prime;
-}
 
-function displayPartners() {
-  const partners = dhdemo.context.partners;
-  if (!partners || partners.length === 0) {
-    dhdemo.ui.partnerContainer.innerHTML = "Noch niemand";
-    return;
-  }
-
-  dhdemo.ui.partnerContainer.innerHTML = "";
-  partners.forEach((partner, index) => {
-    const partnerDiv: HTMLDivElement = document.createElement("div");
-    const infos = partner.getAllInfos();
-    partnerDiv.innerText = "Partner " + partner.name + "(" + index + ") (sk: " + infos.sk + ", ss: " + infos.ss + ")";
-    dhdemo.ui.partnerContainer.appendChild(partnerDiv);
+function redrawUi(s: State) {
+  s.ui.partnerContainer.innerHTML = "";
+  s.partners.forEach((partner) => {
+    const partnerDiv = document.createElement("div");
+    const partnerInfoDiv = document.createElement("div");
+    partnerInfoDiv.innerText = "Partner: " + partner.id + ", Knows: " + Array.from(partner.peopleWeKnow).join(", ");
+    partnerDiv.appendChild(partnerInfoDiv);
+    const partnerPingButton = document.createElement("button");
+    partnerPingButton.innerText = "Ping";
+    partnerPingButton.addEventListener("click", () => {
+      partner.ping(null, "bruh")
+      redrawUi(s);
+    });
+    partnerDiv.appendChild(partnerPingButton);
+    s.ui.partnerContainer.appendChild(partnerDiv);
   });
-}
 
-function displayChannelMessages() {
-  const channel = dhdemo.context.channel;
-  dhdemo.ui.channelMessageContainer.innerHTML = "";
-  if (!channel || channel.publishedMessages.length === 0) {
-    const messageDiv: HTMLDivElement = document.createElement("div");
-    messageDiv.className = "channel-message";
-    messageDiv.innerText = "Kanal existiert nicht oder wurden keine Nachrichten verschickt.";
-    dhdemo.ui.channelMessageContainer.appendChild(messageDiv);
-    return;
-  }
-  channel.publishedMessages.forEach((message) => {
-    const messageDiv: HTMLDivElement = document.createElement("div");
-    messageDiv.className = "channel-message";
-    messageDiv.innerText = message;
-    dhdemo.ui.channelMessageContainer.appendChild(messageDiv);
+
+  /* tabs */
+  s.ui.currentTabContainer.innerHTML = "";
+  const channelTabButton = document.createElement("button");
+  channelTabButton.innerText = "Public";
+  channelTabButton.addEventListener("click", () => {
+    s.ui.currentTab = null;
+    redrawUi(s);
   });
-}
+  s.ui.currentTabContainer.appendChild(channelTabButton);
 
-function updateUi() {
-  if (!dhdemo.context.channel || dhdemo.context.channel.secretEstablished) {
-    dhdemo.ui.establishSecretButton.disabled = true;
-    dhdemo.ui.createPartnerButton.disabled = true;
+  s.partners.forEach((partner) => {
+    const partnerTabButton = document.createElement("button");
+    partnerTabButton.innerText = partner.id;
+    partnerTabButton.addEventListener("click", () => {
+      s.ui.currentTab = partner.id;
+      redrawUi(s);
+    });
+    s.ui.currentTabContainer.appendChild(partnerTabButton);
+  });
+
+
+  // show messages of current tab
+  s.ui.messageContainer.innerHTML = "";
+  if (s.ui.currentTab === null) {
+    s.channel.msgLog.forEach((msg) => {
+      s.ui.messageContainer.appendChild(createMessageDiv(msg));
+    });
   } else {
-    dhdemo.ui.establishSecretButton.disabled = false;
-    dhdemo.ui.createPartnerButton.disabled = false;
+    const partner = s.partners.find((p) => p.id === s.ui.currentTab);
+    if (partner) {
+      partner.msgLog.forEach((msg) => {
+        s.ui.messageContainer.appendChild(createMessageDiv(msg));
+      });
+    }
+  }
+}
+
+function createMessageDiv(msg: Message): HTMLDivElement {
+  const msgDiv = document.createElement("div");
+  msgDiv.className = "channel-message";
+
+  const targetDiv = document.createElement("div");
+  targetDiv.innerText = msg.target === null ? "[All]" : "[" + msg.target + "]";
+  msgDiv.appendChild(targetDiv);
+
+  const fromDiv = document.createElement("div");
+  fromDiv.innerText = "From: " + msg.from || "Public Channel";
+  msgDiv.appendChild(fromDiv);
+
+  const typeDiv = document.createElement("div");
+  typeDiv.innerText = "Type: " + msg.type;
+  msgDiv.appendChild(typeDiv);
+
+
+  const payloadDiv = document.createElement("div");
+
+  switch (msg.type) {
+    case "ping":
+      payloadDiv.innerText = msg.payload;
+      break;
+    case "pong":
+      payloadDiv.innerText = msg.payload;
+      break;
+    case "connect":
+    case "connectResponse":
+      payloadDiv.innerText = "Recipient: " + (msg.payload ? msg.payload.id : "null");
+      break;
+    case "disconnect":
+      payloadDiv.innerText = "No payload";
+    default:
+      payloadDiv.innerText = "Unknown message type";
   }
 
-  displayChannelInfo();
-  displayPartners();
-  displayChannelMessages();
+  msgDiv.appendChild(payloadDiv);
+
+
+  return msgDiv;
 }
+
 
 document.addEventListener("DOMContentLoaded", () => {
-  dhdemo.ui = {
-    createChannelGeneratorInput: document.getElementById("createChannelGenerator") as HTMLInputElement,
-    createChannelPrimeInput: document.getElementById("createChannelPrime") as HTMLInputElement,
-    createChannelButton: document.getElementById("createChannel") as HTMLButtonElement,
-
+  const uiContext: UiContext = {
     createPartnerNameInput: document.getElementById("createPartnerName") as HTMLInputElement,
     createPartnerSkInput: document.getElementById("createPartnerSk") as HTMLInputElement,
     createPartnerButton: document.getElementById("createPartner") as HTMLButtonElement,
-
-    establishSecretButton: document.getElementById("establishSecret") as HTMLButtonElement,
-    channelContainer: document.getElementById("channelContainer") as HTMLDivElement,
     partnerContainer: document.getElementById("partnerContainer") as HTMLDivElement,
-    channelMessageContainer: document.getElementById("channelMessageContainer") as HTMLDivElement
+
+    currentTabContainer: document.getElementById("currentTabContainer") as HTMLDivElement,
+    currentTab: null,
+
+    messageContainer: document.getElementById("messageContainer") as HTMLDivElement,
   }
-  // Asserting that the UI elements are present
 
-  dhdemo.ui.createChannelGeneratorInput.value = "2";
-  dhdemo.ui.createChannelPrimeInput.value = "50021";
-  setPartnerDefaults();
-  updateUi();
+  const state: State = {
+    ui: uiContext,
+    channel: new MsgChannel(),
+    partners: [],
+  }
 
+  setDefaults(state)
+  redrawUi(state)
 
-  dhdemo.ui.createChannelButton.addEventListener("click", () => {
-    const generator: number = parseInt(dhdemo.ui.createChannelGeneratorInput.value);
-    const prime: number = parseInt(dhdemo.ui.createChannelPrimeInput.value);
-
-    if (isNaN(generator) || isNaN(prime)) {
-      alert("Please enter valid numbers for generator and prime");
+  state.ui.createPartnerButton.addEventListener("click", () => {
+    const name = state.ui.createPartnerNameInput.value;
+    const sk = parseInt(state.ui.createPartnerSkInput.value);
+    if (!name || isNaN(sk)) {
+      alert("Please enter a valid name and secret key");
       return;
     }
-
-    dhdemo.context.channel = new Channel(generator, prime);
-    dhdemo.context.partners = [];
-    console.log("Channel created");
-    updateUi();
-  })
-
-  dhdemo.ui.createPartnerButton.addEventListener("click", () => {
-    const name: string = dhdemo.ui.createPartnerNameInput.value;
-    const sk: number = parseInt(dhdemo.ui.createPartnerSkInput.value);
-
-    if (!dhdemo.context.channel) {
-      alert("Please create a channel first");
-      return;
-    }
-    if (isNaN(sk)) {
-      alert("Please enter a valid number for secret key");
-      return;
-    }
-
-    const partner: OldPartner = new OldPartner(name, sk);
-    dhdemo.context.partners.push(partner);
-    dhdemo.context.channel.addPartner(partner);
-    console.log("Partner " + name + " created");
-
-    setPartnerDefaults();
-    updateUi();
+    const partner = new Partner(name);
+    partner.connect(state.channel);
+    state.partners.push(partner);
+    setDefaults(state);
+    redrawUi(state)
   });
 
-  dhdemo.ui.establishSecretButton.addEventListener("click", () => {
-    if (!dhdemo.context.channel) {
-      alert("Please create a channel first");
-      return;
-    }
 
-    if (dhdemo.context.partners.length < 2) {
-      alert("Please create at least 2 partners to establish a secret");
-      return;
-    }
-
-    dhdemo.context.channel.establishSecret();
-    updateUi();
-  });
 });
 
 console.log("Fertig geladen");

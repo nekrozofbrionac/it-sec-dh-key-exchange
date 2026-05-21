@@ -32,9 +32,16 @@
             border: 1px solid lightgray;
             border-radius: 5px;
             padding: 0.5em;
+            display: flex;
+            flex-direction: row;
+            gap: 1em;
+        }
+        .channel-message > div {
+            flex: 1;
         }
 
         .config-grid {
+            width: 100%;
             display: grid;
             grid-template-columns: repeat(3, 1fr);
             grid-auto-rows: 3em ;
@@ -47,21 +54,32 @@
             flex-direction: column;
         }
 
+        #partnerContainer > div {
+            border: 1px solid lightgray;
+            border-radius: 5px;
+            padding: 0.5em;
+
+            display:flex;
+            gap: 1em;
+        }
+        #partnerContainer > div > div {
+            flex: 1
+        }
+        #partnerContainer > div > button {
+            min-width: 10em;
+        }
+
+        #currentTabContainer {
+            display: flex;
+            gap: 1em;
+        }
+
     </style>
 </head>
 <body>
 <div class="outer">
     <h1>DH-Demo</h1>
     <div class="config-grid">
-        <div class="input-field">
-            <label for="createChannelGenerator">Generator</label>
-            <input type="number" id="createChannelGenerator"/>
-        </div>
-        <div class="input-field">
-            <label for="createChannelPrime">Primzahl</label>
-            <input type="number" id="createChannelPrime"/>
-        </div>
-        <button id="createChannel">Kanal erstellen</button>
         <div class="input-field">
             <label for="createPartnerName">Name</label>
             <input type="text" id="createPartnerName"/>
@@ -71,21 +89,18 @@
             <input type="number" id="createPartnerSk"/>
         </div>
         <button id="createPartner">Partner hinzufügen</button>
-        <div>
-            <!--empty for grid lol-->
-        </div>
-        <button id="establishSecret">Geheimnis errechnen</button>
     </div>
-    <h3>
-        Kommunikationskanal
-    </h3>
-    <div class="container" id="channelContainer">
+    <h3>Kommpartner</h3>
+    <div class="container" style="width: 100%" id="partnerContainer">
+        Swag
     </div>
-    <h3>Partner (und deren Geheimnisse)</h3>
-    <div class="container" id="partnerContainer">
+    <h3>Nachrichten</h3>
+    <div style="width: 100%" id="currentTabContainer">
+        <!-- Öffentliche kanäle -->
+        <!-- tabs -->
+        <!-- tabs -->
     </div>
-    <h3>Öffentliche Nachrichten</h3>
-    <div class="container" style="width: 100%" id="channelMessageContainer">
+    <div class="container" style="width: 100%" id="messageContainer">
     </div>
     <div style="height:5em">
         <!--empty for spacing-->
