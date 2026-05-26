@@ -41,6 +41,43 @@ type Message = {
   target: string;
   type: "pong";
   payload: string;
+} | {
+  from: string;
+  target: string | null;
+  type: "dh-init";
+  payload: {
+    groupId: number;
+    generator: number;
+    prime: number;
+    participants: string[];
+  };
+} | {
+  from: string;
+  target: string;
+  type: "dh-response";
+  payload: {
+    groupId: number;
+    generator: number;
+    prime: number;
+    response: "ok";
+  }
+} | {
+  from: string;
+  target: string;
+  type: "dh-key";
+  payload: {
+    groupId: number;
+    publicKey: number;
+    startingIndex: number;
+  }
+} | {
+  from: string;
+  target: string;
+  type: "dh-secret-established";
+  payload: {
+    groupId: number;
+    response: "ok";
+  };
 }
 
 interface Recipient {
@@ -84,9 +121,7 @@ class MsgChannel implements Recipient {
   }
 
   private sendMsg(message: Message) {
-    // this.msgLog.push(message);
     if (message.target === null) {
-      // broadcast
       this.recipients.forEach((recipient) => {
         if (recipient.id === message.from) {
           return;
@@ -94,10 +129,21 @@ class MsgChannel implements Recipient {
         recipient.receiveMsg(message)
       });
     } else {
-      // direct message
       this.recipients.get(message.target)?.receiveMsg(message);
     }
   }
+}
+
+interface DHKE {
+  groupId: number;
+  generator: number;
+  prime: number;
+  secretKey: number;
+  participants: string[];
+  ownIndex: number;
+  participantConfirmations: { [participant: string]: boolean };
+  publicKeys: Map<number, number>;
+  sharedSecret: number | null;
 }
 
 class Partner implements Recipient {
@@ -106,6 +152,8 @@ class Partner implements Recipient {
   public channel: Recipient | null = null;
 
   public peopleWeKnow: Set<string> = new Set<string>();
+  private dhke: Map<number, DHKE> = new Map<number, DHKE>();
+  private dhkeParticipantConfirmations: Map<number, { [participant: string]: boolean }> = new Map<number, { [participant: string]: boolean }>();
 
   constructor(
     name: string
@@ -170,8 +218,80 @@ class Partner implements Recipient {
       case "disconnect":
         this.peopleWeKnow.delete(message.from);
         break;
+      case "dh-init":
+        const { groupId, generator, prime, participants } = message.payload;
+        const secretKey = Math.floor(Math.random() * prime) + 1;
+
+        const ownIndex = participants.indexOf(this.id);
+        const participantConfirmations: { [participant: string]: boolean } = {};
+        participantConfirmations[this.id] = true; // we confirm ourselves immediately
+
+        // Merge confirmations that may have arrived before dh-init
+        const preExisting = this.dhkeParticipantConfirmations.get(groupId) || {};
+        for (const p in preExisting) {
+          participantConfirmations[p] = true;
+        }
+
+        this.dhke.set(groupId, {
+          groupId,
+          generator,
+          prime,
+          secretKey,
+          ownIndex,
+          participants,
+          participantConfirmations,
+          publicKeys: new Map<number, number>(),
+          sharedSecret: null,
+        });
+
+        this.dhkeParticipantConfirmations.delete(groupId);
+
+        participants.forEach(p => {
+          if (p === this.id) {
+            return;
+          }
+          if (!participantConfirmations[p]) {
+            this.sendMsg({
+              from: this.id,
+              target: p,
+              type: "dh-response",
+              payload: {
+                groupId,
+                generator,
+                prime,
+                response: "ok",
+              }
+            });
+          }
+        });
+        break;
+      case "dh-response":
+        const dhke = this.dhke.get(message.payload.groupId);
+        if (!dhke) {
+          if (!this.dhkeParticipantConfirmations.has(message.payload.groupId)) {
+            this.dhkeParticipantConfirmations.set(message.payload.groupId, {});
+          }
+          this.dhkeParticipantConfirmations.get(message.payload.groupId)![message.from] = true;
+          break;
+        }
+
+        dhke.participantConfirmations[message.from] = true;
+        if (dhke.participants.every(v => dhke.participantConfirmations[v])) {
+          const publicKey = modExp(dhke.generator, dhke.secretKey, dhke.prime);
+          dhke.publicKeys.set(dhke.ownIndex, publicKey);
+
+          // send your public key to the next one
+
+        }
+        break;
+      case "dh-key":
+        // find out whether you are the last one and if not, send the key to the next one
+        // otherwise calculate the shared secret and send a "dh-secret-established" message to everyone
+        break;
+      case "dh-secret-established":
+        console.log(`Group ${message.payload.groupId} secret established with ${message.from}`);
+        break;
       default:
-        console.log("Received message of type: " + message.type);
         return;
     }
   }
@@ -187,33 +307,10 @@ class Partner implements Recipient {
 }
 
 const names: string[] = [
-  "Alice",
-  "Bob",
-  "Charlie",
-  "Dave",
-  "Not-Eve",
-  "Frank",
-  "Grace",
-  "Heidi",
-  "Ivan",
-  "Judy",
-  "Karl",
-  "Leo",
-  "Not-Mallory",
-  "Nina",
-  "Oscar",
-  "Peggy",
-  "Quentin",
-  "Rupert",
-  "Sybil",
-  "Trent",
-  "Uma",
-  "Victor",
-  "Walter",
-  "Xavier",
-  "Yvonne",
-  "Zara",
-  "ThinkOfYourOwnNamesNow"
+  "Alice", "Bob", "Charlie", "Dave", "Not-Eve", "Frank", "Grace", "Heidi",
+  "Ivan", "Judy", "Kian", "Leonie", "Not-Mallory", "Nina", "Oliver", "Peggy",
+  "Quentin", "Rupert", "Svenja", "Trent", "Uma", "Victor", "Walter", "Xavier",
+  "Yvonne", "Zara", "ThinkOfYourOwnNamesNow"
 ];
 
 type UiContext = {
@@ -237,7 +334,6 @@ function setDefaults(s: State) {
   s.ui.createPartnerSkInput.value = (Math.floor(Math.random() * 10000) + 1).toString();
 }
 
-
 function redrawUi(s: State) {
   s.ui.partnerContainer.innerHTML = "";
   s.partners.forEach((partner) => {
@@ -255,8 +351,6 @@ function redrawUi(s: State) {
     s.ui.partnerContainer.appendChild(partnerDiv);
   });
 
-
-  /* tabs */
   s.ui.currentTabContainer.innerHTML = "";
   const channelTabButton = document.createElement("button");
   channelTabButton.innerText = "Public";
@@ -276,8 +370,6 @@ function redrawUi(s: State) {
     s.ui.currentTabContainer.appendChild(partnerTabButton);
   });
 
-
-  // show messages of current tab
   s.ui.messageContainer.innerHTML = "";
   const tableElement = document.createElement("table");
   tableElement.style.borderSpacing = "1em 0";
@@ -299,7 +391,6 @@ function redrawUi(s: State) {
 function createTableRow(msg: Message, recipient: Recipient | undefined): HTMLTableRowElement {
   const publicChanenlName = "Public Channel";
   const msgTr = document.createElement("tr");
-  //msgTr.style.display = "flex";
   msgTr.style.whiteSpace = "nowrap";
 
   if (recipient) {
@@ -314,8 +405,6 @@ function createTableRow(msg: Message, recipient: Recipient | undefined): HTMLTab
       ? (msg.target || publicChanenlName)
       : (msg.from || publicChanenlName)
     msgTr.appendChild(targetDiv);
-
-
   } else {
     const from = document.createElement("td");
     from.innerText = msg.from === null ? publicChanenlName : "" + msg.from + "";
@@ -364,10 +453,8 @@ document.addEventListener("DOMContentLoaded", () => {
     createPartnerSkInput: document.getElementById("createPartnerSk") as HTMLInputElement,
     createPartnerButton: document.getElementById("createPartner") as HTMLButtonElement,
     partnerContainer: document.getElementById("partnerContainer") as HTMLDivElement,
-
     currentTabContainer: document.getElementById("currentTabContainer") as HTMLDivElement,
     currentTab: null,
-
     messageContainer: document.getElementById("messageContainer") as HTMLDivElement,
   }
 
@@ -393,8 +480,6 @@ document.addEventListener("DOMContentLoaded", () => {
     setDefaults(state);
     redrawUi(state)
   });
-
-
 });
 
 console.log("Fertig geladen");
