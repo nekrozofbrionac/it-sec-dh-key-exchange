@@ -68,9 +68,9 @@ class MsgChannel implements Recipient {
       }
       const messageToSend: Message = {
         from: null,
-          target: id,
+        target: id,
         type: "connectResponse",
-        payload: success ? this: null
+        payload: success ? this : null
       }
       this.msgLog.push(messageToSend);
       this.sendMsg(messageToSend)
@@ -279,62 +279,84 @@ function redrawUi(s: State) {
 
   // show messages of current tab
   s.ui.messageContainer.innerHTML = "";
+  const tableElement = document.createElement("table");
+  tableElement.style.borderSpacing = "1em 0";
+  s.ui.messageContainer.appendChild(tableElement);
   if (s.ui.currentTab === null) {
-    s.channel.msgLog.forEach((msg) => {
-      s.ui.messageContainer.appendChild(createMessageDiv(msg));
+    s.channel.msgLog.slice().reverse().forEach((msg) => {
+      tableElement.appendChild(createTableRow(msg, undefined));
     });
   } else {
     const partner = s.partners.find((p) => p.id === s.ui.currentTab);
     if (partner) {
       partner.msgLog.forEach((msg) => {
-        s.ui.messageContainer.appendChild(createMessageDiv(msg));
+        tableElement.appendChild(createTableRow(msg, partner));
       });
     }
   }
 }
 
-function createMessageDiv(msg: Message): HTMLDivElement {
-  const msgDiv = document.createElement("div");
-  msgDiv.className = "channel-message";
+function createTableRow(msg: Message, recipient: Recipient | undefined): HTMLTableRowElement {
+  const publicChanenlName = "Public Channel";
+  const msgTr = document.createElement("tr");
+  //msgTr.style.display = "flex";
+  msgTr.style.whiteSpace = "nowrap";
 
-  const targetDiv = document.createElement("div");
-  targetDiv.innerText = msg.target === null ? "[All]" : "[" + msg.target + "]";
-  msgDiv.appendChild(targetDiv);
+  if (recipient) {
+    const arrowIn = document.createElement("td");
+    arrowIn.innerHTML = msg.from === recipient.id
+      ? "<span class=\"material-symbols-outlined\">arrow_left_alt</span>"
+      : "<span class=\"material-symbols-outlined\">arrow_right_alt</span>";
+    msgTr.appendChild(arrowIn);
 
-  const fromDiv = document.createElement("div");
-  fromDiv.innerText = "From: " + msg.from || "Public Channel";
-  msgDiv.appendChild(fromDiv);
-
-  const typeDiv = document.createElement("div");
-  typeDiv.innerText = "Type: " + msg.type;
-  msgDiv.appendChild(typeDiv);
+    const targetDiv = document.createElement("td");
+    targetDiv.innerText = msg.from === recipient.id
+      ? (msg.target || publicChanenlName)
+      : (msg.from || publicChanenlName)
+    msgTr.appendChild(targetDiv);
 
 
-  const payloadDiv = document.createElement("div");
+  } else {
+    const from = document.createElement("td");
+    from.innerText = msg.from === null ? publicChanenlName : "" + msg.from + "";
+    msgTr.appendChild(from);
+
+    const arrow = document.createElement("td");
+    arrow.innerHTML = "<span class=\"material-symbols-outlined\">arrow_right_alt</span>";
+    msgTr.appendChild(arrow);
+
+    const target = document.createElement("td");
+    target.innerText = msg.target || "Public Channel";
+    msgTr.appendChild(target);
+  }
+
+  const typeTd = document.createElement("td");
+  typeTd.innerText = msg.type;
+  msgTr.appendChild(typeTd);
+
+  const payloadTd = document.createElement("td");
+  payloadTd.style.width = "90%";
 
   switch (msg.type) {
     case "ping":
-      payloadDiv.innerText = msg.payload;
+      payloadTd.innerText = msg.payload;
       break;
     case "pong":
-      payloadDiv.innerText = msg.payload;
+      payloadTd.innerText = msg.payload;
       break;
     case "connect":
     case "connectResponse":
-      payloadDiv.innerText = "Recipient: " + (msg.payload ? msg.payload.id : "null");
+      payloadTd.innerText = "Recipient: " + (msg.payload ? msg.payload.id : publicChanenlName);
       break;
     case "disconnect":
-      payloadDiv.innerText = "No payload";
+      payloadTd.innerText = "No payload";
     default:
-      payloadDiv.innerText = "Unknown message type";
+      payloadTd.innerText = "Unknown message type";
   }
 
-  msgDiv.appendChild(payloadDiv);
-
-
-  return msgDiv;
+  msgTr.appendChild(payloadTd);
+  return msgTr
 }
-
 
 document.addEventListener("DOMContentLoaded", () => {
   const uiContext: UiContext = {

@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <title>DH-Demo</title>
     <script src="index.js"></script>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&icon_names=arrow_left_alt,arrow_right_alt" />
     <style>
         body {
             font-family: sans-serif;
@@ -23,21 +24,7 @@
         .container {
             display: flex;
             flex-direction: column;
-            gap: 1em;
             align-items: stretch;
-        }
-
-        .channel-message {
-            width: 100%;
-            border: 1px solid lightgray;
-            border-radius: 5px;
-            padding: 0.5em;
-            display: flex;
-            flex-direction: row;
-            gap: 1em;
-        }
-        .channel-message > div {
-            flex: 1;
         }
 
         .config-grid {
@@ -55,8 +42,8 @@
         }
 
         #partnerContainer > div {
-            border: 1px solid lightgray;
-            border-radius: 5px;
+            /* border: 1px solid lightgray;
+            border-radius: 5px; */
             padding: 0.5em;
 
             display:flex;
@@ -92,16 +79,11 @@
     </div>
     <h3>Kommpartner</h3>
     <div class="container" style="width: 100%" id="partnerContainer">
-        Swag
+        Swag mehr swag
     </div>
     <h3>Nachrichten</h3>
-    <div style="width: 100%" id="currentTabContainer">
-        <!-- Öffentliche kanäle -->
-        <!-- tabs -->
-        <!-- tabs -->
-    </div>
-    <div class="container" style="width: 100%" id="messageContainer">
-    </div>
+    <div style="width: 100%" id="currentTabContainer"></div>
+    <div class="container" style="width: 100%" id="messageContainer"></div>
     <div style="height:5em">
         <!--empty for spacing-->
     </div>
