@@ -25,7 +25,7 @@ type Message = {
   from: string | null;
   target: string;
   type: "connectResponse";
-  payload: Recipient | null; //
+  payload: Recipient | null;
 } | {
   from: string;
   target: null;
@@ -40,6 +40,11 @@ type Message = {
   from: string;
   target: string;
   type: "pong";
+  payload: string;
+} | {
+  from: string;
+  target: string;
+  type: "note";
   payload: string;
 } | {
   from: string;
@@ -90,12 +95,10 @@ interface Recipient {
 class MsgChannel implements Recipient {
   public readonly id = null;
   public msgLog: Message[] = [];
-
   public readonly recipients: Map<string, Recipient> = new Map<string, Recipient>();
 
   public receiveMsg(message: Message) {
     this.msgLog.push(message);
-
     if (message.type === "connect") {
       const id: string = message.from;
       const recipient: Recipient = message.payload;
@@ -116,7 +119,6 @@ class MsgChannel implements Recipient {
     if (message.type === "disconnect") {
       this.recipients.delete(message.from);
     }
-
     this.sendMsg(message);
   }
 
@@ -142,18 +144,19 @@ interface DHKE {
   participants: string[];
   ownIndex: number;
   participantConfirmations: { [participant: string]: boolean };
-  publicKeys: Map<number, number>;
   sharedSecret: number | null;
+  awareOfSharedSecret: { [participant: string]: boolean };
 }
 
 class Partner implements Recipient {
   public readonly id: string;
   public msgLog: Message[] = [];
   public channel: Recipient | null = null;
-
   public peopleWeKnow: Set<string> = new Set<string>();
   private dhke: Map<number, DHKE> = new Map<number, DHKE>();
-  private dhkeParticipantConfirmations: Map<number, { [participant: string]: boolean }> = new Map<number, { [participant: string]: boolean }>();
+  private dhkeParticipantConfirmations: Map<number, { [participant: string]: boolean }> = new Map<number, {
+    [participant: string]: boolean
+  }>();
 
   constructor(
     name: string
@@ -188,9 +191,69 @@ class Partner implements Recipient {
   ping(target: string | null, payload: string = "ping"): void {
     this.sendMsg({
       from: this.id,
-      target: target,
+      target,
       type: "ping",
-      payload: payload,
+      payload
+    });
+  }
+
+  initDH(groupId: number, generator: number, prime: number): void {
+    const participants = Array.from(this.peopleWeKnow);
+    participants.push(this.id);
+    const sortedParticipants = participants.slice().sort();
+    const ownIndex = sortedParticipants.indexOf(this.id);
+    const secretKey = Math.floor(Math.random() * prime) + 1;
+    this.dhke.set(groupId, {
+      groupId,
+      generator,
+      prime,
+      secretKey,
+      participants: sortedParticipants,
+      ownIndex,
+      participantConfirmations: { [this.id]: true },
+      sharedSecret: null,
+      awareOfSharedSecret: {},
+    });
+    this.sendMsg({
+      from: this.id,
+      target: this.id,
+      type: "note",
+      payload: `I'm establishing a DHKE, choosing secret key: ${ secretKey }`
+    })
+    sortedParticipants.forEach(p => {
+      if (p === this.id) {
+        return;
+      }
+      this.sendMsg({
+        from: this.id,
+        target: p,
+        type: "dh-init",
+        payload: { groupId, generator, prime, participants: sortedParticipants },
+      });
+    })
+  }
+
+  startDhIfReady(groupId: number) {
+    const dhke = this.dhke.get(groupId);
+    // console.log("startdhifready", this, groupId, dhke);
+    if (!dhke) {
+      return;
+    }
+    if (!dhke.participants.every(p => dhke.participantConfirmations[p])) {
+      return;
+    }
+    const nextIndex = (dhke.ownIndex + 1) % dhke.participants.length;
+
+    // first round?
+    this.sendMsg({
+      from: this.id,
+      target: dhke.participants[nextIndex],
+      type: "dh-key",
+      payload: {
+        groupId: dhke.groupId,
+        publicKey: modExp(dhke.generator, dhke.secretKey, dhke.prime),
+        startingIndex: dhke.ownIndex,
+      }
     });
   }
 
@@ -221,12 +284,11 @@ class Partner implements Recipient {
       case "dh-init":
         const { groupId, generator, prime, participants } = message.payload;
         const secretKey = Math.floor(Math.random() * prime) + 1;
-
         const ownIndex = participants.indexOf(this.id);
         const participantConfirmations: { [participant: string]: boolean } = {};
-        participantConfirmations[this.id] = true; // we confirm ourselves immediately
+        participantConfirmations[this.id] = true;
+        participantConfirmations[message.from] = true;
 
-        // Merge confirmations that may have arrived before dh-init
         const preExisting = this.dhkeParticipantConfirmations.get(groupId) || {};
         for (const p in preExisting) {
           participantConfirmations[p] = true;
@@ -240,32 +302,36 @@ class Partner implements Recipient {
           ownIndex,
           participants,
           participantConfirmations,
-          publicKeys: new Map<number, number>(),
           sharedSecret: null,
+          awareOfSharedSecret: {}
         });
-
         this.dhkeParticipantConfirmations.delete(groupId);
-
+        this.sendMsg({
+          from: this.id,
+          target: this.id,
+          type: "note",
+          payload: `${ message.from } tries to establish dhke, choosing secret key: ${ secretKey }`
+        })
         participants.forEach(p => {
           if (p === this.id) {
             return;
           }
-          if (!participantConfirmations[p]) {
-            this.sendMsg({
-              from: this.id,
-              target: p,
-              type: "dh-response",
-              payload: {
-                groupId,
-                generator,
-                prime,
-                response: "ok",
-              }
-            });
-          }
+          this.sendMsg({
+            from: this.id,
+            target: p,
+            type: "dh-response",
+            payload: {
+              groupId,
+              generator,
+              prime,
+              response: "ok",
+            }
+          });
         });
+
+        this.startDhIfReady(groupId);
         break;
-      case "dh-response":
+      case "dh-response": {
         const dhke = this.dhke.get(message.payload.groupId);
         if (!dhke) {
           if (!this.dhkeParticipantConfirmations.has(message.payload.groupId)) {
@@ -274,34 +340,94 @@ class Partner implements Recipient {
           this.dhkeParticipantConfirmations.get(message.payload.groupId)![message.from] = true;
           break;
         }
-
         dhke.participantConfirmations[message.from] = true;
-        if (dhke.participants.every(v => dhke.participantConfirmations[v])) {
-          const publicKey = modExp(dhke.generator, dhke.secretKey, dhke.prime);
-          dhke.publicKeys.set(dhke.ownIndex, publicKey);
+        this.startDhIfReady(message.payload.groupId);
+        break;
+      }
+      case "dh-key": {
+        const dhke = this.dhke.get(message.payload.groupId);
+        if (!dhke) {
+          return;
+        }
 
-          // send your public key to the next one
+        // solang own index < 0 ist juckt das doch nicht
+        // oder sogar ownindex == starting index
 
+        const nextIndex = (dhke.ownIndex + 1) % dhke.participants.length;
+        if (message.payload.startingIndex != nextIndex) {
+          // normal case, just calculate the new public key and pass it on
+          this.sendMsg({
+            from: this.id,
+            target: dhke.participants[nextIndex],
+            type: "dh-key",
+            payload: {
+              groupId: dhke.groupId,
+              publicKey: modExp(message.payload.publicKey, dhke.secretKey, dhke.prime),
+              startingIndex: message.payload.startingIndex,
+            }
+          })
+        } else {
+          // we are the initiator and receive the key back, calculate the shared secret and send the final message
+          dhke.sharedSecret = modExp(message.payload.publicKey, dhke.secretKey, dhke.prime);
+          dhke.awareOfSharedSecret[this.id] = true;
+          this.sendMsg({
+            from: this.id,
+            target: this.id,
+            type: "note",
+            payload: `Secret established, Shared Secret: ${ dhke.sharedSecret }`
+          })
+          this.checkIfSecretEstablished(dhke);
+          dhke.participants.forEach(p => {
+            if (p === this.id) {
+              return;
+            }
+            this.sendMsg({
+              from: this.id,
+              target: p,
+              type: "dh-secret-established",
+              payload: {
+                groupId: dhke.groupId,
+                response: "ok",
+              }
+            });
+          });
         }
         break;
-      case "dh-key":
-        // find out whether you are the last one and if not, send the key to the next one
-        // otherwise calculate the shared secret and send a "dh-secret-established" message to everyone
+      }
+      case "dh-secret-established": {
+        const dhke = this.dhke.get(message.payload.groupId);
+        if (!dhke) {
+          return;
+        }
+        dhke.awareOfSharedSecret[message.from] = true;
+        this.checkIfSecretEstablished(dhke);
+
+        console.log(`Group ${ message.payload.groupId } secret established`);
         break;
-      case "dh-secret-established":
-        console.log(`Group ${message.payload.groupId} secret established with ${message.from}`);
-        break;
-      default:
-        return;
+      }
+    }
+  }
+
+  private checkIfSecretEstablished(dhke: DHKE) {
+    if (dhke.participants.every(p => dhke.awareOfSharedSecret[p])) {
+      this.sendMsg({
+        from: this.id,
+        target: this.id,
+        type: "note",
+        payload: "Everyone has the shared secret :)"
+      })
     }
   }
 
   private sendMsg(message: Message): void {
+    this.msgLog.push(message);
     if (!this.channel) {
       console.error("Not connected to a channel, cannot send message");
       return;
     }
-    this.msgLog.push(message);
+    if (message.target === this.id) {
+      return;
+    }
     this.channel.receiveMsg(message);
   }
 }
@@ -314,24 +440,25 @@ const names: string[] = [
 ];
 
 type UiContext = {
-  createPartnerNameInput: HTMLInputElement
-  createPartnerSkInput: HTMLInputElement
-  createPartnerButton: HTMLButtonElement
-  partnerContainer: HTMLDivElement
-  currentTabContainer: HTMLDivElement
-  currentTab: string | null
-  messageContainer: HTMLDivElement
+  createPartnerNameInput: HTMLInputElement;
+  createPartnerButton: HTMLButtonElement;
+  dhGroupIdInput: HTMLInputElement;
+  dhGeneratorInput: HTMLInputElement;
+  dhPrimeInput: HTMLInputElement;
+  partnerContainer: HTMLDivElement;
+  currentTabContainer: HTMLDivElement;
+  currentTab: string | null;
+  messageContainer: HTMLDivElement;
 }
 
 interface State {
-  ui: UiContext
+  ui: UiContext;
   channel: MsgChannel;
   partners: Partner[];
 }
 
 function setDefaults(s: State) {
   s.ui.createPartnerNameInput.value = names[s.partners.length % names.length];
-  s.ui.createPartnerSkInput.value = (Math.floor(Math.random() * 10000) + 1).toString();
 }
 
 function redrawUi(s: State) {
@@ -339,88 +466,124 @@ function redrawUi(s: State) {
   s.partners.forEach((partner) => {
     const partnerDiv = document.createElement("div");
     const partnerInfoDiv = document.createElement("div");
-    partnerInfoDiv.innerText = "Partner: " + partner.id + ", Knows: " + Array.from(partner.peopleWeKnow).join(", ");
+    partnerInfoDiv.innerText = `Partner: ${ partner.id }, Knows: ${ Array.from(partner.peopleWeKnow).join(", ") }`;
     partnerDiv.appendChild(partnerInfoDiv);
+
     const partnerPingButton = document.createElement("button");
     partnerPingButton.innerText = "Ping";
-    partnerPingButton.addEventListener("click", () => {
-      partner.ping(null, "bruh")
+    partnerPingButton.onclick = () => {
+      partner.ping(null, "bruh");
       redrawUi(s);
-    });
+    };
     partnerDiv.appendChild(partnerPingButton);
+
+    const dhButton = document.createElement("button");
+    dhButton.innerText = "Start DH";
+    dhButton.onclick = () => {
+      const groupId = parseInt(s.ui.dhGroupIdInput.value);
+      const generator = parseInt(s.ui.dhGeneratorInput.value);
+      const prime = parseInt(s.ui.dhPrimeInput.value);
+      if (!isNaN(groupId) && !isNaN(generator) && !isNaN(prime)) {
+        partner.initDH(groupId, generator, prime);
+      } else {
+        alert("Invalid DH parameters");
+      }
+      redrawUi(s);
+    };
+    partnerDiv.appendChild(dhButton);
     s.ui.partnerContainer.appendChild(partnerDiv);
   });
 
   s.ui.currentTabContainer.innerHTML = "";
-  const channelTabButton = document.createElement("button");
-  channelTabButton.innerText = "Public";
-  channelTabButton.addEventListener("click", () => {
+  const pubBtn = document.createElement("button");
+  pubBtn.innerText = "Public";
+  pubBtn.onclick = () => {
     s.ui.currentTab = null;
     redrawUi(s);
-  });
-  s.ui.currentTabContainer.appendChild(channelTabButton);
+  };
+  s.ui.currentTabContainer.appendChild(pubBtn);
 
-  s.partners.forEach((partner) => {
-    const partnerTabButton = document.createElement("button");
-    partnerTabButton.innerText = partner.id;
-    partnerTabButton.addEventListener("click", () => {
+  s.partners.forEach(partner => {
+    const tabBtn = document.createElement("button");
+    tabBtn.innerText = partner.id;
+    tabBtn.onclick = () => {
       s.ui.currentTab = partner.id;
       redrawUi(s);
-    });
-    s.ui.currentTabContainer.appendChild(partnerTabButton);
+    };
+    s.ui.currentTabContainer.appendChild(tabBtn);
   });
 
   s.ui.messageContainer.innerHTML = "";
-  const tableElement = document.createElement("table");
-  tableElement.style.borderSpacing = "1em 0";
-  s.ui.messageContainer.appendChild(tableElement);
+  const table = document.createElement("table");
+  table.style.borderSpacing = "0";
+  s.ui.messageContainer.appendChild(table);
+
   if (s.ui.currentTab === null) {
-    s.channel.msgLog.slice().reverse().forEach((msg) => {
-      tableElement.appendChild(createTableRow(msg, undefined));
-    });
+    s.channel.msgLog.slice().reverse().forEach(msg => table.appendChild(createTableRow(msg, undefined)));
   } else {
-    const partner = s.partners.find((p) => p.id === s.ui.currentTab);
-    if (partner) {
-      partner.msgLog.forEach((msg) => {
-        tableElement.appendChild(createTableRow(msg, partner));
-      });
-    }
+    const partner = s.partners.find(p => p.id === s.ui.currentTab);
+    if (partner) partner.msgLog.forEach(msg => table.appendChild(createTableRow(msg, partner)));
   }
 }
 
-function createTableRow(msg: Message, recipient: Recipient | undefined): HTMLTableRowElement {
-  const publicChanenlName = "Public Channel";
+function createTableRow(msg: Message, activeTab: Recipient | undefined): HTMLTableRowElement {
+  const publicChannelName = "Public Channel";
   const msgTr = document.createElement("tr");
   msgTr.style.whiteSpace = "nowrap";
+  msgTr.style.borderRadius = "5px"
 
-  if (recipient) {
+  if (activeTab) {
+    // ankommen blau
+    // schicken grün
+    msgTr.style.background = msg.from === activeTab.id
+      ? "#ddddff"
+      : "#ddffdd";
+
+    if (msg.from == msg.target) {
+      msgTr.style.background = "#ffffdd"
+    }
+
     const arrowIn = document.createElement("td");
-    arrowIn.innerHTML = msg.from === recipient.id
-      ? "<span class=\"material-symbols-outlined\">arrow_left_alt</span>"
-      : "<span class=\"material-symbols-outlined\">arrow_right_alt</span>";
+    arrowIn.innerHTML = msg.from === activeTab.id
+      ? "Out"// "<span class=\"material-symbols-outlined\">arrow_left_alt</span>"
+      : "In"// "<span class=\"material-symbols-outlined\">arrow_right_alt</span>";
+    if (msg.from == msg.target) {
+      arrowIn.innerHTML = "";
+    }
+    arrowIn.style.paddingRight = "1em";
     msgTr.appendChild(arrowIn);
 
-    const targetDiv = document.createElement("td");
-    targetDiv.innerText = msg.from === recipient.id
-      ? (msg.target || publicChanenlName)
-      : (msg.from || publicChanenlName)
-    msgTr.appendChild(targetDiv);
+    const targetCell = document.createElement("td");
+    targetCell.innerText = msg.from === activeTab.id
+      ? (msg.target || publicChannelName)
+      : (msg.from || publicChannelName)
+    if (msg.from == msg.target) {
+      targetCell.innerHTML = "";
+    }
+
+    targetCell.style.paddingRight = "1em";
+    msgTr.appendChild(targetCell);
+
   } else {
     const from = document.createElement("td");
-    from.innerText = msg.from === null ? publicChanenlName : "" + msg.from + "";
+    from.innerText = msg.from === null ? publicChannelName : "" + msg.from + "";
+    from.style.paddingRight = "1em";
     msgTr.appendChild(from);
 
     const arrow = document.createElement("td");
-    arrow.innerHTML = "<span class=\"material-symbols-outlined\">arrow_right_alt</span>";
+    arrow.innerHTML = "->"// "<span class=\"material-symbols-outlined\">arrow_right_alt</span>";
+    arrow.style.paddingRight = "1em";
     msgTr.appendChild(arrow);
 
     const target = document.createElement("td");
     target.innerText = msg.target || "Public Channel";
+    target.style.paddingRight = "1em";
     msgTr.appendChild(target);
   }
 
   const typeTd = document.createElement("td");
   typeTd.innerText = msg.type;
+  typeTd.style.paddingRight = "1em";
   msgTr.appendChild(typeTd);
 
   const payloadTd = document.createElement("td");
@@ -435,51 +598,57 @@ function createTableRow(msg: Message, recipient: Recipient | undefined): HTMLTab
       break;
     case "connect":
     case "connectResponse":
-      payloadTd.innerText = "Recipient: " + (msg.payload ? msg.payload.id : publicChanenlName);
+      payloadTd.innerText = "Recipient: " + (msg.payload ? msg.payload.id : publicChannelName);
       break;
     case "disconnect":
       payloadTd.innerText = "No payload";
+      break;
+    case "dh-init":
+      payloadTd.innerText = `Group: ${ msg.payload.groupId }, Prime: ${ msg.payload.prime } ${ msg.payload.generator }, Participants: ${ msg.payload.participants.join(", ") }`;
+      break;
+    case "dh-response":
+      payloadTd.innerText = `Group: ${ msg.payload.groupId }, Resp: ${ msg.payload.groupId }`;
+      break;
+    case "dh-key":
+      payloadTd.innerText = `Group: ${ msg.payload.groupId }, PK: ${ msg.payload.publicKey }, StartingIndex: ${ msg.payload.startingIndex }`;
+      break;
+    case "dh-secret-established":
+      payloadTd.innerText = `Group: ${ msg.payload.groupId }, Status: ${ msg.payload.response }`;
+      break;
+    case "note":
+      payloadTd.innerText = msg.payload;
+      break;
     default:
       payloadTd.innerText = "Unknown message type";
   }
 
   msgTr.appendChild(payloadTd);
-  return msgTr
+  return msgTr;
 }
 
 document.addEventListener("DOMContentLoaded", () => {
   const uiContext: UiContext = {
     createPartnerNameInput: document.getElementById("createPartnerName") as HTMLInputElement,
-    createPartnerSkInput: document.getElementById("createPartnerSk") as HTMLInputElement,
     createPartnerButton: document.getElementById("createPartner") as HTMLButtonElement,
+    dhGroupIdInput: document.getElementById("dhGroupId") as HTMLInputElement,
+    dhGeneratorInput: document.getElementById("dhGenerator") as HTMLInputElement,
+    dhPrimeInput: document.getElementById("dhPrime") as HTMLInputElement,
     partnerContainer: document.getElementById("partnerContainer") as HTMLDivElement,
     currentTabContainer: document.getElementById("currentTabContainer") as HTMLDivElement,
     currentTab: null,
     messageContainer: document.getElementById("messageContainer") as HTMLDivElement,
-  }
-
-  const state: State = {
-    ui: uiContext,
-    channel: new MsgChannel(),
-    partners: [],
-  }
-
-  setDefaults(state)
-  redrawUi(state)
-
-  state.ui.createPartnerButton.addEventListener("click", () => {
+  };
+  const state: State = { ui: uiContext, channel: new MsgChannel(), partners: [] };
+  setDefaults(state);
+  redrawUi(state);
+  state.ui.createPartnerButton.onclick = () => {
     const name = state.ui.createPartnerNameInput.value;
-    const sk = parseInt(state.ui.createPartnerSkInput.value);
-    if (!name || isNaN(sk)) {
-      alert("Please enter a valid name and secret key");
-      return;
+    if (name) {
+      const partner = new Partner(name);
+      partner.connect(state.channel);
+      state.partners.push(partner);
+      setDefaults(state);
+      redrawUi(state);
     }
-    const partner = new Partner(name);
-    partner.connect(state.channel);
-    state.partners.push(partner);
-    setDefaults(state);
-    redrawUi(state)
-  });
+  };
 });
-
-console.log("Fertig geladen");

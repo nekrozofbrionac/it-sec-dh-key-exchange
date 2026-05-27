@@ -71,15 +71,24 @@
             <label for="createPartnerName">Name</label>
             <input type="text" id="createPartnerName"/>
         </div>
-        <div class="input-field">
-            <label for="createPartnerSk">Privater Schlüssel</label>
-            <input type="number" id="createPartnerSk"/>
-        </div>
         <button id="createPartner">Partner hinzufügen</button>
+    </div>
+    <div class="config-grid">
+        <div class="input-field">
+            <label for="dhGroupId">Group ID</label>
+            <input type="number" id="dhGroupId" value="1"/>
+        </div>
+        <div class="input-field">
+            <label for="dhGenerator">Generator (g)</label>
+            <input type="number" id="dhGenerator" value="2"/>
+        </div>
+        <div class="input-field">
+            <label for="dhPrime">Prime (p)</label>
+            <input type="number" id="dhPrime" value="100043"/>
+        </div>
     </div>
     <h3>Kommpartner</h3>
     <div class="container" style="width: 100%" id="partnerContainer">
-        Swag mehr swag
     </div>
     <h3>Nachrichten</h3>
     <div style="width: 100%" id="currentTabContainer"></div>
