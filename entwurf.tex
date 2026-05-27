@@ -294,13 +294,35 @@
     der sich in die Kommunikation einklinkt, kann DH ohne zusätzliche
     Maßnahmen brechen. Das ist Thema des nächsten Abschnitts (Demo und
     Man-in-the-Middle-Angriff).
+    
+    \section{Die große Lücke in unauthentifiziertem Diffie-Hellman} \label{AuthDH}
+    \subsection{Man-in-the-Middle}
+    
+    Der einfache Diffie-Hellman-Schlüsselaustausch ist nicht sicher gegen einen Man-in-the-Middle Angriff (MITM), denn ein Dolev-Yao Angreifer (Mallory) kann den Schlüsselaustausch zwischen Alice und Bob in dem Mallory den direkten Schlüsselaustausch zwischen Alice und Bob blockiert und mit je Alice und Bob einen eigenen Schlüsselaustausch durchführt in dem sich Mallory jeweils als Bob oder Alice ausgibt.
+    
+    Es ist zwingend notwendig, dass Mallory aktiv ist bevor Alice und Bob den Schlüsselaustausch starten, sonst ist es Mallory nicht möglich den Schlüsselaustausch abzufangen und um nicht aufzufallen muss Mallory auch so lange aktiv bleiben, wie Alice und Bob aktiv sind.
+    
+    \subsection{Authentifizierter Diffe-Hellman}
+    
+    Der MITM Angriff ist möglich weil der klassische Diffie-Hellman keine Möglichkeit zur Authentifizierung bietet.
+    Wenn Alice und Bob die Möglichkeit haben sich gegenseitig, auf sicherer Kryptographie basierend, zu authentifizieren können sie einen MITM Angriff erkennen, da Mallory die Authentifizierung nicht fälschen kann.
+    \\
+    
+    Als Beispiel möchten wir hier eine Zertifikats-basierte Authentifizierung zeigen. Dazu müssen Alice und Bob je ein asymmetrisches  Schlüsselpaar (zur Signierung) besitzen und jeweils ihre öffentliche Schlüssel von einer Certificate Authority (CA) zertifiziert haben lassen.
+    
+    Wenn Alice und Bob nun ihre Nachrichten signieren, und das Zertifikat für ihre Schlüssel senden. 
+    Also Alice nicht nur $A$ sondern $A, sign(A), Cert_{Alice}$ sendet und Bob mit $B, sign(B), Cer_{Bob}$ antwortet.
+    Können beide die Authentizität der Nachrichten über die Signaturen zur CA verbinden.
+    
+    Mallory kann weder die Signaturen fälschen / manipulieren noch ihre eigenen Schlüssel durch die CA als Alice oder Bob zertifizieren lassen.
+    Dadurch kann nun ein MITM Angriff verhindert werden.
 
     \section{Vermeidung von Angriffen}
 
     Wie bei allen kryptografischen Protokollen ist es auch bei DH wichtig, die richtigen Parameter zu wählen und zusätzliche Maßnahmen zu ergreifen, um Angriffe zu verhindern. Im Folgenden werden einige bekannte Angriffe und deren Gegenmaßnahmen beschrieben.
 
     \subsection{Man in the middle}
-    Wie bereits erwähnt, kann ein aktiver Angreifer, der sich in die Kommunikation einklinkt,den DH-Schlüsselaustausch brechen. Um einen klassischen Man-in-the-Middle-Angriff zu verhindern, müssen die Parteien ihre öffentlichen Schlüssel authentifizieren. Ist erstmal sichergestellt, dass zwei Parteien tatsächlich miteinander kommunizieren, ist ein Angriff als Zwischenposten nicht mehr möglich. Das kann zum Beispiel durch digitale Signaturen oder durch die Verwendung von Zertifikaten geschehen. In TLS 1.3 wird dies durch die Verwendung von Zertifikaten und der Signatur der Handshake-Nachrichten erreicht.\cite[§4.4.2, §4.4.3]{rfc8446} Näheres dazu wird in Abschnitt xx erläutert. 
+    Wie bereits erwähnt, kann ein aktiver Angreifer, der sich in die Kommunikation einklinkt,den DH-Schlüsselaustausch brechen. Um einen klassischen Man-in-the-Middle-Angriff zu verhindern, müssen die Parteien ihre öffentlichen Schlüssel authentifizieren. Ist erstmal sichergestellt, dass zwei Parteien tatsächlich miteinander kommunizieren, ist ein Angriff als Zwischenposten nicht mehr möglich. Das kann zum Beispiel durch digitale Signaturen oder durch die Verwendung von Zertifikaten geschehen. In TLS 1.3 wird dies durch die Verwendung von Zertifikaten und der Signatur der Handshake-Nachrichten erreicht.\cite[§4.4.2, §4.4.3]{rfc8446} Näheres dazu wird in Abschnitt \ref{AuthDH} erläutert. 
 
     \subsection{Logjam}
     Ein weiterer typischer Angriff ist der sogenannte Logjam-Angriff, bei dem ein Angreifer schwache Parameter (z.B. eine zu kleine Primzahl) erzwingt, um das DLP lösbar zu machen. Dabei manipuliert der Angreifer die Handshake-Nachrichten so, dass beide Parteien davon ausgehen, dass das System nur schwache Gruppen unterstützt, und dadurch auf unsichere Parameter zurückfallen. So werden dann zum Beispiel nur 512 Bit große Primzahlen verwendet statt die sichereren 2048 Bit.\cite{logjam} Moderne Protokolle wie TLS 1.3 haben solche schwachen Gruppen explizit ausgeschlossen, um dieses Problem zu vermeiden.\cite[§1.2]{rfc8446} Da aber viele Systeme noch TLS 1.2 und alte DHE\_EXPORT (absichtlich schwache Krypthografie) unterstützen, da diese nie aktiv entfernt wurden, ist es wichtig, auch hier auf die Wahl sicherer Parameter zu achten und schwache Gruppen aktiv zu deaktivieren.\cite{logjam, rfc7919}
