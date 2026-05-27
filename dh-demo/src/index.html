@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>DH-Demo</title>
+    <script src="index.js"></script>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&icon_names=arrow_left_alt,arrow_right_alt" />
+    <style>
+        body {
+            font-family: sans-serif;
+            display: flex;
+            justify-content: center;
+        }
+
+        .outer {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1em;
+            width: 70em;
+            min-height: 5em;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .config-grid {
+            width: 100%;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-auto-rows: 3em ;
+            gap: 1em;
+            justify-items: stretch;
+        }
+
+        .input-field {
+            display: flex;
+            flex-direction: column;
+        }
+
+        #partnerContainer > div {
+            /* border: 1px solid lightgray;
+            border-radius: 5px; */
+            padding: 0.5em;
+
+            display:flex;
+            gap: 1em;
+        }
+        #partnerContainer > div > div {
+            flex: 1
+        }
+        #partnerContainer > div > button {
+            min-width: 10em;
+        }
+
+        #currentTabContainer {
+            display: flex;
+            gap: 1em;
+        }
+
+    </style>
+</head>
+<body>
+<div class="outer">
+    <h1>DH-Demo</h1>
+    <div class="config-grid">
+        <div class="input-field">
+            <label for="createPartnerName">Name</label>
+            <input type="text" id="createPartnerName"/>
+        </div>
+        <button id="createPartner">Partner hinzufügen</button>
+    </div>
+    <div class="config-grid">
+        <div class="input-field">
+            <label for="dhGroupId">Group ID</label>
+            <input type="number" id="dhGroupId" value="1"/>
+        </div>
+        <div class="input-field">
+            <label for="dhGenerator">Generator (g)</label>
+            <input type="number" id="dhGenerator" value="2"/>
+        </div>
+        <div class="input-field">
+            <label for="dhPrime">Prime (p)</label>
+            <input type="number" id="dhPrime" value="100043"/>
+        </div>
+    </div>
+    <h3>Kommpartner</h3>
+    <div class="container" style="width: 100%" id="partnerContainer">
+    </div>
+    <h3>Nachrichten</h3>
+    <div style="width: 100%" id="currentTabContainer"></div>
+    <div class="container" style="width: 100%" id="messageContainer"></div>
+    <div style="height:5em">
+        <!--empty for spacing-->
+    </div>
+</div>
+</body>
+</html>
