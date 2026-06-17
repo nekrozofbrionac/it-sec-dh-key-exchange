@@ -136,6 +136,163 @@ class MsgChannel implements Recipient {
   }
 }
 
+class ManInTheMiddle implements Recipient {
+  id: string;
+  msgLog: Message[] = [];
+
+  victim: Recipient;
+  relay: Recipient;
+  victimDHKEs: Map<number, DHKE> = new Map<number, DHKE>();
+  victimDHKEConfirmations: Map<number, {[key: string]: boolean}> = new Map<number, {[p: string]: boolean}>();
+  relayDHKEs: Map<number, DHKE> = new Map<number, DHKE>();
+  relayDHKEConfirmations: Map<number, {[key: string]: boolean}> = new Map<number, {[p: string]: boolean}>();
+
+  constructor(
+    victim: Recipient,
+    relay: Recipient,
+  ) {
+    this.victim = victim;
+    this.relay = relay;
+    this.id = this.victim.id + "(Mallory)"
+  }
+
+  receiveMsg(msg: Message): void {
+    this.msgLog.push(msg);
+    if (msg.from === this.victim.id) {
+      const counterfeit: Message = {...msg};
+      counterfeit.from = this.id
+      switch (counterfeit.type) {
+        case "connect":
+          counterfeit.payload = this
+          break;
+        case "connectResponse":
+          break;
+        case "disconnect":
+          break;
+        case "ping":
+          break;
+        case "pong":
+          break;
+        case "note":
+          break;
+        case "dh-init":
+          // this is a request from our victim to establish a shared secret with others
+          // we shall just do it with the victim only.
+
+          // set up 2 new dhke objects and spoof them
+          const { groupId, generator, prime } = counterfeit.payload;
+          const participants = counterfeit.payload.participants.map(p => p === this.victim.id ? this.id : p)
+
+          const secretKey = Math.floor(Math.random() * prime) + 1;
+          const ownIndex = participants.indexOf(this.id);
+
+          const participantConfirmations: { [participant: string]: boolean } = {};
+          participantConfirmations[this.id] = true;
+
+          const preExisting = this.victimDHKEConfirmations.get(groupId) || {};
+          for (const p in preExisting) {
+            participantConfirmations[p] = true;
+          }
+          this.victimDHKEs.set(groupId, {
+            groupId,
+            generator,
+            prime,
+            secretKey,
+            ownIndex,
+            participants,
+            participantConfirmations,
+            sharedSecret: null,
+            awareOfSharedSecret: {}
+          });
+          this.victimDHKEConfirmations.delete(groupId);
+
+          /*  TODO: Whatever this means for mallory
+          this.sendMsg({
+            from: this.id,
+            target: this.id,
+            type: "note",
+            payload: `${ message.from } tries to establish dhke, choosing secret key: ${ secretKey }`
+          })
+           */
+
+          participants.forEach(p => {
+            if (p === this.id) {
+              return;
+            }
+            this.sendMsg({
+              from: this.id,
+              target: p,
+              type: "dh-response",
+              payload: {
+                groupId,
+                generator,
+                prime,
+                response: "ok",
+              }
+            });
+          });
+
+          // this.startDhIfReady(groupId);
+
+
+          break;
+        case "dh-response":
+          break;
+        case "dh-key":
+          break;
+        case "dh-secret-established":
+          break;
+        default:
+          break;
+      }
+      this.relay.receiveMsg(counterfeit);
+    } else if (msg.target === this.id) {
+      const counterfeit: Message = {...msg};
+      counterfeit.target = this.victim.id
+      switch (counterfeit.type) {
+        case "connectResponse":
+          counterfeit.payload = this
+          break;
+        case "ping":
+          break;
+        case "pong":
+          break;
+        case "note":
+          break;
+        case "dh-init":
+          // someone else tries to establish a dhke with our victim,
+          // we pretend we are them and establish 2 separate dhke instances,
+          // one with the victim and one with the relay
+
+          // set up 2 new dhke objects and spoof them
+          counterfeit.payload.groupId
+          break;
+        case "dh-response":
+          break;
+        case "dh-key":
+          break;
+        case "dh-secret-established":
+          break;
+        default:
+          break;
+      }
+      this.relay.receiveMsg(counterfeit);
+    } else {
+      console.log("what", msg)
+    }
+    // msg.meow
+  }
+
+  sendMsg(msg: Message): void {
+    this.msgLog.push(msg);
+    if (msg.target === this.victim.id) {
+      this.victim.receiveMsg(msg);
+    } else if (msg.from === this.id) {
+      this.relay.receiveMsg(msg);
+    }
+  }
+}
+
 interface DHKE {
   groupId: number;
   generator: number;
@@ -469,10 +626,18 @@ function redrawUi(s: State) {
     partnerInfoDiv.innerText = `Partner: ${ partner.id }, Knows: ${ Array.from(partner.peopleWeKnow).join(", ") }`;
     partnerDiv.appendChild(partnerInfoDiv);
 
+    const mitmAttackButton = document.createElement("button");
+    mitmAttackButton.innerText = "MitM Attack"
+    mitmAttackButton.onclick = () => {
+      partner.ping(null, "meow");
+      redrawUi(s);
+    };
+
+
     const partnerPingButton = document.createElement("button");
     partnerPingButton.innerText = "Ping";
     partnerPingButton.onclick = () => {
-      partner.ping(null, "bruh");
+      partner.ping(null, "Hi");
       redrawUi(s);
     };
     partnerDiv.appendChild(partnerPingButton);
