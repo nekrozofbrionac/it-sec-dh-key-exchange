@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>DH-Demo</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            display: flex;
+            justify-content: center;
+        }
+
+        .outer {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1em;
+            width: 70em;
+            min-height: 5em;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .config-grid {
+            width: 100%;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-auto-rows: 3em;
+            gap: 1em;
+            justify-items: stretch;
+        }
+
+        .input-field {
+            display: flex;
+            flex-direction: column;
+        }
+
+        #partnerContainer > div {
+            padding: 0.5em;
+            display:flex;
+            gap: 1em;
+        }
+
+        #partnerContainer > div > div {
+            flex: 1
+        }
+
+        #partnerContainer > div button {
+            min-width: 10em;
+        }
+
+        #currentTabContainer {
+            display: flex;
+            gap: 1em;
+        }
+
+        td {
+            padding-right: 1em;
+        }
+
+        form {
+            margin: 0;
+        }
+    </style>
+</head>
+<body>
+<div class="outer">
+    <h1>DH-Demo</h1>
+    <form method="post" action="/party" class="config-grid">
+        <div class="input-field">
+            <label for="createPartnerName">Name</label>
+            <input type="text" id="createPartnerName" name="name" value="{{NEXT_NAME}}"/>
+        </div>
+        <button id="createPartner">Partner hinzufuegen</button>
+        <button formaction="/reset">Reset</button>
+    </form>
+    <form method="post" id="dhForm" class="config-grid">
+        <div class="input-field">
+            <label>Group ID</label>
+            <input type="number" name="groupId" value="{{GROUP_ID}}"/>
+        </div>
+        <div class="input-field">
+            <label>Generator (g)</label>
+            <input type="number" name="generator" value="{{GENERATOR}}"/>
+        </div>
+        <div class="input-field">
+            <label>Prime (p)</label>
+            <input type="number" name="prime" value="{{PRIME}}"/>
+        </div>
+    </form>
+    {{ERROR}}
+    <h3>Kommpartner</h3>
+    <div class="container" style="width: 100%" id="partnerContainer">{{PARTNERS}}</div>
+    <button form="dhForm" formaction="/mitm" style="width:100%;height:3em">Start MITM</button>
+    <h3>Nachrichten</h3>
+    <form method="get" id="currentTabContainer" style="width:100%">{{TABS}}</form>
+    <div class="container" style="width: 100%" id="messageContainer">
+        <table style="border-spacing:0">{{MESSAGES}}</table>
+    </div>
+    <div style="height:5em"></div>
+</div>
+<script>
+    document.addEventListener("submit", () => {
+        sessionStorage.setItem("scrollY", String(window.scrollY));
+    });
+
+    window.addEventListener("load", () => {
+        const scrollY = sessionStorage.getItem("scrollY");
+        if (scrollY !== null) {
+            window.scrollTo(0, Number(scrollY));
+            sessionStorage.removeItem("scrollY");
+        }
+    });
+</script>
+</body>
+</html>
