@@ -4,9 +4,18 @@ Diese Version fasst die alte `dh-demo` nicht an. Sie nutzt nur die Python-Standa
 
 ## Start
 
+Schnelle Demo-Version:
+
 ```powershell
 cd .\python-dh-demo
 python .\app.py
+```
+
+Fachlich sauberere Extended-Version mit getrennten Teilnehmern:
+
+```powershell
+cd .\python-dh-demo
+python .\app_extended.py
 ```
 
 Dann im Browser öffnen:
@@ -14,6 +23,8 @@ Dann im Browser öffnen:
 ```text
 http://127.0.0.1:3000
 ```
+
+Hinweis: Immer nur eine der beiden Varianten gleichzeitig starten, da beide Port `3000` nutzen.
 
 ## Demo-Ablauf
 
