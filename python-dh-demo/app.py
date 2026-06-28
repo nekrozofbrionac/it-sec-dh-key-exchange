@@ -124,6 +124,7 @@ def group_dh(initiator_name, group_id, generator, prime):
             add_party_note(receiver, f"Round {starter}: {old_value}^{secrets[receiver]} mod {prime} = {value}")
             if step < len(names) - 1:
                 next_name = names[(start_index + step + 1) % len(names)]
+                add_message(public_log, receiver, next_name, "dh-key", f"Group: {group_id}, round {starter}, forwarded: {value}")
                 add_message(find_party(receiver)["log"], receiver, next_name, "dh-key", f"Sent value for round {starter}: {value}")
 
         owner = names[(start_index - 1) % len(names)]
