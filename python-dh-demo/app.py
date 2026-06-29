@@ -27,6 +27,10 @@ def log_section(title):
 def find_party(name):
     return next((p for p in parties if p["name"] == name), None)
 
+
+def ordered_participants(initiator):
+    return [initiator["name"], *sorted(initiator["known"])]
+
 # Add a message to the log of a party or the public log. The message is a dictionary 
 def add_message(log, sender, target, kind, payload):
     log.append({"from": sender, "target": target, "type": kind, "payload": payload})
@@ -81,7 +85,7 @@ def group_dh(initiator_name, group_id, generator, prime):
     if not initiator:
         raise ValueError("Unbekannter Partner")
 
-    names = sorted({initiator_name, *initiator["known"]})
+    names = ordered_participants(initiator)
     if len(names) < 3:
         raise ValueError("DH braucht mindestens 3 verbundene Parteien")
 
@@ -152,7 +156,7 @@ def mitm(initiator_name, group_id, generator, prime):
     if not initiator:
         raise ValueError("Unbekannter Partner")
 
-    names = sorted({initiator_name, *initiator["known"]})
+    names = ordered_participants(initiator)
     if len(names) < 2:
         raise ValueError("MITM braucht mindestens 2 verbundene Parteien")
 
