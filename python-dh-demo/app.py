@@ -13,6 +13,7 @@ TEMPLATE_PATH = Path(__file__).with_name("index.html")
 parties = []
 public_log = []
 mallory_log = []
+mitm_enabled = False
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s", datefmt="%H:%M:%S")
 
@@ -29,7 +30,9 @@ def find_party(name):
 
 
 def ordered_participants(initiator):
-    return [initiator["name"], *sorted(initiator["known"])]
+    names = sorted({initiator["name"], *initiator["known"]})
+    initiator_index = names.index(initiator["name"])
+    return names[initiator_index:] + names[:initiator_index]
 
 # Add a message to the log of a party or the public log. The message is a dictionary 
 def add_message(log, sender, target, kind, payload):
@@ -304,6 +307,7 @@ def render_page(tab="", error=""):
         .replace("{{GROUP_ID}}", current_group)
         .replace("{{GENERATOR}}", current_generator)
         .replace("{{PRIME}}", current_prime)
+        .replace("{{MITM_CHECKED}}", "checked" if mitm_enabled else "")
         .replace("{{ERROR}}", error_html)
         .replace("{{PARTNERS}}", "".join(partner_rows))
         .replace("{{TABS}}", "".join(tab_buttons))
@@ -317,6 +321,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_html(render_page(tab))
 
     def do_POST(self):
+        global mitm_enabled
         try:
             form = self.read_form()
             path = urlparse(self.path).path
@@ -325,7 +330,8 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/ping":
                 ping(form.get("name", ""))
             elif path == "/dh":
-                if "mitm" in form:
+                mitm_enabled = "mitm" in form
+                if mitm_enabled:
                     mitm(form["initiator"], int(form["groupId"]), int(form["generator"]), int(form["prime"]))
                 else:
                     group_dh(form["initiator"], int(form["groupId"]), int(form["generator"]), int(form["prime"]))
@@ -333,6 +339,7 @@ class Handler(BaseHTTPRequestHandler):
                 parties.clear()
                 public_log.clear()
                 mallory_log.clear()
+                mitm_enabled = False
                 logging.info("[RESET] Demo zurueckgesetzt")
             self.send_html(render_page())
         except Exception as error:
