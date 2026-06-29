@@ -12,6 +12,7 @@ TEMPLATE_PATH = Path(__file__).with_name("index.html")
 
 parties = []
 public_log = []
+mallory_log = []
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s", datefmt="%H:%M:%S")
 
@@ -33,6 +34,10 @@ def add_message(log, sender, target, kind, payload):
 # Add a note to the log of a party. (no target, no sender)
 def add_party_note(name, payload):
     add_message(find_party(name)["log"], name, name, "note", payload)
+
+
+def add_mallory_note(payload):
+    add_message(mallory_log, "Mallory", "Mallory", "note", payload)
 
 # Connect a new component/party to the public channel. The name must be unique and non-empty.
 def connect(name):
@@ -142,11 +147,15 @@ def group_dh(initiator_name, group_id, generator, prime):
     add_message(public_log, initiator_name, None, "dh-secret-established", f"Group: {group_id}, Status: ok")
 
 
-def mitm(generator, prime):
-    if len(parties) < 2:
-        raise ValueError("MITM braucht mindestens 2 Parteien")
+def mitm(initiator_name, group_id, generator, prime):
+    initiator = find_party(initiator_name)
+    if not initiator:
+        raise ValueError("Unbekannter Partner")
 
-    names = [p["name"] for p in parties]
+    names = sorted({initiator_name, *initiator["known"]})
+    if len(names) < 2:
+        raise ValueError("MITM braucht mindestens 2 verbundene Parteien")
+
     secrets = {name: random.randint(2, prime - 2) for name in names}
     public_keys = {name: pow(generator, secrets[name], prime) for name in names}
     mallory_secrets = {
@@ -164,14 +173,21 @@ def mitm(generator, prime):
     log_section("[MITM] Man-in-the-Middle-Angriff")
     logging.info("  Angriff gegen Gruppe: %s", ", ".join(names))
     logging.info("  Oeffentlich sichtbar: generator g=%s, prime p=%s", generator, prime)
+    add_message(public_log, initiator_name, None, "dh-init", f"Group: {group_id}, Participants: {', '.join(names)}")
+    add_mallory_note(f"Watching group {group_id}: {', '.join(names)}")
+    add_mallory_note(f"Public parameters: g={generator}, p={prime}")
+    for name in names:
+        if name == initiator_name:
+            add_message(find_party(name)["log"], name, None, "dh-init", f"Started group {group_id}: {', '.join(names)}")
+        else:
+            add_message(find_party(name)["log"], initiator_name, name, "dh-init", f"Join group {group_id}: {', '.join(names)}")
+
     logging.info("")
     logging.info("  Alle Parteien starten normal")
     for name in names:
-        next_name = names[(names.index(name) + 1) % len(names)]
         logging.info("    %s: %s^%s mod %s = %s", name, generator, secrets[name], prime, public_keys[name])
         add_party_note(name, f"MITM: DH secret exponent {secrets[name]}")
         add_party_note(name, f"MITM: own Public Key {generator}^{secrets[name]} mod {prime} = {public_keys[name]}")
-        add_message(find_party(name)["log"], name, next_name, "dh-key", f"Started round {name}: {public_keys[name]}")
     logging.info("")
     logging.info("  Mallory erzeugt Fake-Werte pro Runde und Empfaenger")
     for starter, receiver in fake_keys:
@@ -187,9 +203,20 @@ def mitm(generator, prime):
             calculated = pow(fake_value, secrets[receiver], prime)
 
             logging.info("    %s sendet %s an %s; Mallory ersetzt durch %s", previous, value, receiver, fake_value)
-            add_message(public_log, previous, receiver, "dh-key", f"Round {starter}: {value}")
+            if step == 1:
+                public_payload = f"Group: {group_id}, round {starter}: {value}"
+            else:
+                public_payload = f"Group: {group_id}, round {starter}, forwarded: {value}"
+            add_message(public_log, previous, receiver, "dh-key", public_payload)
+            if step == 1:
+                add_message(find_party(starter)["log"], starter, receiver, "dh-key", f"Started round {starter}: {value}")
+            add_message(mallory_log, previous, "Mallory", "dh-key", f"Intercepted round {starter} for {receiver}: {value}")
+            add_mallory_note(f"Fake for round {starter} to {receiver}: {generator}^{mallory_secrets[(starter, receiver)]} mod {prime} = {fake_value}")
             add_message(public_log, "Mallory", receiver, "dh-key", f"Fake for round {starter}: {fake_value}")
+            add_message(mallory_log, "Mallory", receiver, "dh-key", f"Replaced with fake value: {fake_value}")
             add_message(find_party(receiver)["log"], "Mallory", receiver, "dh-key", f"Received fake value for round {starter}: {fake_value}")
+            mallory_shared = pow(public_keys[receiver], mallory_secrets[(starter, receiver)], prime)
+            add_mallory_note(f"Secret with {receiver} for round {starter}: {public_keys[receiver]}^{mallory_secrets[(starter, receiver)]} mod {prime} = {mallory_shared}")
 
             if step < len(names) - 1:
                 next_name = names[(start_index + step + 1) % len(names)]
@@ -197,14 +224,14 @@ def mitm(generator, prime):
                 add_message(find_party(receiver)["log"], receiver, next_name, "dh-key", f"Sent value for round {starter}: {calculated}")
                 value = calculated
             else:
-                mallory_shared = pow(public_keys[receiver], mallory_secrets[(starter, receiver)], prime)
                 logging.info("    %s glaubt an Gruppengeheimnis %s; Mallory hat mit %s ebenfalls %s", receiver, calculated, receiver, mallory_shared)
                 add_party_note(receiver, f"MITM round {starter}, final step: {fake_value}^{secrets[receiver]} mod {prime} = {calculated}")
                 add_party_note(receiver, f"Round {starter} complete after {len(names) - 1} steps, unauthenticated secret: {calculated}")
 
     for name in names:
         add_message(find_party(name)["log"], "Mallory", name, "dh-secret-established", "All expected rounds processed, peer not authenticated")
-    add_message(public_log, "Mallory", None, "note", f"MITM established {len(names)} separate unauthenticated secrets")
+    add_message(mallory_log, "Mallory", None, "dh-secret-established", f"Established {len(mallory_secrets)} separate unauthenticated secrets")
+    add_message(public_log, "Mallory", None, "note", f"MITM established {len(mallory_secrets)} separate unauthenticated secrets")
 
 
 def esc(value):
@@ -212,19 +239,20 @@ def esc(value):
 
 
 def render_message_rows(tab):
-    active = find_party(tab) if tab else None
-    messages = active["log"] if active else public_log
+    active = find_party(tab) if tab and tab != "__mallory__" else None
+    active_name = "Mallory" if tab == "__mallory__" else active["name"] if active else None
+    messages = mallory_log if tab == "__mallory__" else active["log"] if active else public_log
     rows = []
 
     for index, msg in enumerate(messages):
         sender = msg["from"] or "Public Channel"
         target = msg["target"] or "Public Channel"
-        if active:
+        if active_name:
             if msg["from"] == msg["target"]:
                 color = "#ffffdd"
                 direction = ""
                 peer = ""
-            elif msg["from"] == active["name"]:
+            elif msg["from"] == active_name:
                 color = "#eeeeee"
                 direction = "Out"
                 peer = target
@@ -261,6 +289,8 @@ def render_page(tab="", error=""):
             <button form="dhForm" formaction="/dh" name="initiator" value="{esc(p["name"])}">Start DH</button>
         </div>""")
         tab_buttons.append(f'<button name="tab" value="{esc(p["name"])}">{esc(p["name"])}</button>')
+    if mallory_log:
+        tab_buttons.append('<button name="tab" value="__mallory__">Mallory</button>')
 
     error_html = f'<div style="color:#a00">{esc(error)}</div>' if error else ""
     template = TEMPLATE_PATH.read_text(encoding="utf-8")
@@ -291,12 +321,14 @@ class Handler(BaseHTTPRequestHandler):
             elif path == "/ping":
                 ping(form.get("name", ""))
             elif path == "/dh":
-                group_dh(form["initiator"], int(form["groupId"]), int(form["generator"]), int(form["prime"]))
-            elif path == "/mitm":
-                mitm(int(form.get("generator", 2)), int(form.get("prime", 100043)))
+                if "mitm" in form:
+                    mitm(form["initiator"], int(form["groupId"]), int(form["generator"]), int(form["prime"]))
+                else:
+                    group_dh(form["initiator"], int(form["groupId"]), int(form["generator"]), int(form["prime"]))
             elif path == "/reset":
                 parties.clear()
                 public_log.clear()
+                mallory_log.clear()
                 logging.info("[RESET] Demo zurueckgesetzt")
             self.send_html(render_page())
         except Exception as error:

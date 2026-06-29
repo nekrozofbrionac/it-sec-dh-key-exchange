@@ -28,7 +28,7 @@
         .config-grid {
             width: 100%;
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(4, 1fr);
             grid-auto-rows: 3em;
             gap: 1em;
             justify-items: stretch;
@@ -91,11 +91,14 @@
             <label>Prime (p)</label>
             <input type="number" name="prime" value="{{PRIME}}"/>
         </div>
+        <label class="input-field">
+            Man-in-the-Middle
+            <input type="checkbox" name="mitm"/>
+        </label>
     </form>
     {{ERROR}}
     <h3>Kommpartner</h3>
     <div class="container" style="width: 100%" id="partnerContainer">{{PARTNERS}}</div>
-    <button form="dhForm" formaction="/mitm" style="width:100%;height:3em">Start MITM</button>
     <h3>Nachrichten</h3>
     <form method="get" id="currentTabContainer" style="width:100%">{{TABS}}</form>
     <div class="container" style="width: 100%" id="messageContainer">
